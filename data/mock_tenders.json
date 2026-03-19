@@ -1,0 +1,164 @@
+[
+  {
+    "tender_id": "ANAC-2026-001234",
+    "title": "Servizi di manutenzione stradale ordinaria e straordinaria",
+    "issuer": {
+      "issuer_id": "ISS-001",
+      "name": "Comune di Milano",
+      "contact_email": "appalti@comune.milano.it",
+      "city": "Milano",
+      "region": "Lombardia",
+      "nuts_code": "ITC4C"
+    },
+    "estimated_value": 450000.00,
+    "publication_date": "2026-03-13",
+    "submission_deadline": "2026-04-12T23:59:59",
+    "execution_location": "Milano, Lombardia",
+    "nuts_codes": ["ITC4C"],
+    "cpv_codes": ["45233140-2", "45233141-9"],
+    "contract_type": "services",
+    "eu_funded": false,
+    "renewable": true,
+    "has_lots": true,
+    "lots_data": {
+      "lots": [
+        {"lot_id": "1", "description": "Zona Nord", "value": 200000},
+        {"lot_id": "2", "description": "Zona Sud", "value": 250000}
+      ],
+      "max_lots_per_bidder": 2
+    },
+    "tender_url": "https://pubblicitalegale.anticorruzione.it/bandi/001234",
+    "document_portal_url": "https://portale-documenti.comune.milano.it/gara-001234",
+    "participants": [
+      {"tax_id": "IT12345678901", "name": "Costruzioni Rossi SRL", "role": "bidder"},
+      {"tax_id": "IT98765432109", "name": "Strade Verdi SpA", "role": "bidder"}
+    ]
+  },
+  {
+    "tender_id": "ANAC-2026-001235",
+    "title": "Fornitura di attrezzature informatiche per uffici pubblici",
+    "issuer": {
+      "issuer_id": "ISS-002",
+      "name": "Regione Lazio",
+      "contact_email": "procurement@regione.lazio.it",
+      "city": "Roma",
+      "region": "Lazio",
+      "nuts_code": "ITI4"
+    },
+    "estimated_value": 1200000.00,
+    "publication_date": "2026-03-08",
+    "submission_deadline": "2026-04-07T23:59:59",
+    "execution_location": "Roma, Lazio",
+    "nuts_codes": ["ITI43"],
+    "cpv_codes": ["30200000-1", "30213100-6"],
+    "contract_type": "supplies",
+    "eu_funded": true,
+    "renewable": false,
+    "has_lots": false,
+    "tender_url": "https://pubblicitalegale.anticorruzione.it/bandi/001235",
+    "document_portal_url": "https://acquisti.regione.lazio.it/doc/001235",
+    "participants": [
+      {"tax_id": "IT11223344556", "name": "Tech Solutions Italia SRL", "role": "bidder"},
+      {"tax_id": "IT66778899001", "name": "Digital Office SpA", "role": "bidder"},
+      {"tax_id": "IT55443322110", "name": "IT Supplies Group", "role": "bidder"}
+    ]
+  },
+  {
+    "tender_id": "ANAC-2026-001236",
+    "title": "Lavori di ristrutturazione edificio scolastico",
+    "issuer": {
+      "issuer_id": "ISS-003",
+      "name": "Provincia di Torino",
+      "contact_email": "lavori.pubblici@provincia.torino.it",
+      "city": "Torino",
+      "region": "Piemonte",
+      "nuts_code": "ITC11"
+    },
+    "estimated_value": 850000.00,
+    "publication_date": "2026-03-03",
+    "submission_deadline": "2026-04-02T23:59:59",
+    "execution_location": "Torino, Piemonte",
+    "nuts_codes": ["ITC11"],
+    "cpv_codes": ["45214200-2", "45262500-6"],
+    "contract_type": "works",
+    "eu_funded": false,
+    "renewable": false,
+    "has_lots": true,
+    "lots_data": {
+      "lots": [
+        {"lot_id": "1", "description": "Lavori strutturali", "value": 500000},
+        {"lot_id": "2", "description": "Impianti elettrici", "value": 200000},
+        {"lot_id": "3", "description": "Impianti termici", "value": 150000}
+      ],
+      "max_lots_per_bidder": 2
+    },
+    "tender_url": "https://pubblicitalegale.anticorruzione.it/bandi/001236",
+    "document_portal_url": "https://gare.provincia.torino.it/docs/001236",
+    "participants": [
+      {"tax_id": "IT22334455667", "name": "Edilizia Moderna SRL", "role": "bidder"}
+    ]
+  },
+  {
+    "tender_id": "ANAC-2026-001237",
+    "title": "Servizi di consulenza per digitalizzazione processi amministrativi",
+    "issuer": {
+      "issuer_id": "ISS-004",
+      "name": "Comune di Firenze",
+      "contact_email": "innovazione@comune.firenze.it",
+      "city": "Firenze",
+      "region": "Toscana",
+      "nuts_code": "ITI14"
+    },
+    "estimated_value": 320000.00,
+    "publication_date": "2026-03-15",
+    "submission_deadline": "2026-04-14T23:59:59",
+    "execution_location": "Firenze, Toscana",
+    "nuts_codes": ["ITI14"],
+    "cpv_codes": ["72000000-5", "72260000-5"],
+    "contract_type": "services",
+    "eu_funded": true,
+    "renewable": true,
+    "has_lots": false,
+    "tender_url": "https://pubblicitalegale.anticorruzione.it/bandi/001237",
+    "document_portal_url": "https://appalti.comune.fi.it/documenti/001237",
+    "participants": [
+      {"tax_id": "IT33445566778", "name": "Digital Consulting Partners", "role": "bidder"},
+      {"tax_id": "IT88990011223", "name": "Innovation Hub Italia SRL", "role": "bidder"}
+    ]
+  },
+  {
+    "tender_id": "ANAC-2026-001238",
+    "title": "Fornitura e installazione pannelli solari per edifici pubblici",
+    "issuer": {
+      "issuer_id": "ISS-005",
+      "name": "Comune di Bologna",
+      "contact_email": "energia@comune.bologna.it",
+      "city": "Bologna",
+      "region": "Emilia-Romagna",
+      "nuts_code": "ITH55"
+    },
+    "estimated_value": 680000.00,
+    "publication_date": "2026-02-26",
+    "submission_deadline": "2026-03-28T23:59:59",
+    "execution_location": "Bologna, Emilia-Romagna",
+    "nuts_codes": ["ITH55"],
+    "cpv_codes": ["09331200-0", "45310000-3"],
+    "contract_type": "supplies",
+    "eu_funded": true,
+    "renewable": false,
+    "has_lots": true,
+    "lots_data": {
+      "lots": [
+        {"lot_id": "1", "description": "Scuole primarie", "value": 400000},
+        {"lot_id": "2", "description": "Uffici comunali", "value": 280000}
+      ],
+      "max_lots_per_bidder": 2
+    },
+    "tender_url": "https://pubblicitalegale.anticorruzione.it/bandi/001238",
+    "document_portal_url": "https://portale.comune.bologna.it/gare/001238",
+    "participants": [
+      {"tax_id": "IT44556677889", "name": "Green Energy Solutions SpA", "role": "bidder"},
+      {"tax_id": "IT99887766554", "name": "Solar Tech Italia SRL", "role": "bidder"}
+    ]
+  }
+]
