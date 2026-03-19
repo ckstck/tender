@@ -83,6 +83,24 @@ sudo -u postgres createdb tender_db
 python scripts/init_db.py
 ```
 
+### MinIO Setup (for Document Storage)
+
+```bash
+# Start MinIO with Docker Compose
+docker-compose -f docker-compose.minio.yml up -d
+
+# MinIO will be available at:
+# - API: http://localhost:9000
+# - Console: http://localhost:9001
+# - Default credentials: minioadmin / minioadmin
+
+# Configure MinIO in .env
+echo "MINIO_ENDPOINT=localhost:9000" >> .env
+echo "MINIO_ACCESS_KEY=minioadmin" >> .env
+echo "MINIO_SECRET_KEY=minioadmin" >> .env
+echo "MINIO_BUCKET=tender-documents" >> .env
+```
+
 ### First Run
 
 ```bash
@@ -165,19 +183,17 @@ python -m src.cli.main status
 
 ### Cron Setup
 
-For daily automated ingestion:
+For daily automated ingestion and document downloads:
 
 ```bash
-# Make script executable
-chmod +x scripts/cron_ingestion.sh
+# Make scripts executable
+chmod +x scripts/cron_ingestion.sh scripts/cron_documents.sh
 
-# Edit script to set correct path
-nano scripts/cron_ingestion.sh
-
-# Add to crontab (runs daily at 2 AM)
+# Add to crontab
 crontab -e
-# Add line:
+# Add lines:
 0 2 * * * /home/loki/projects/tender/scripts/cron_ingestion.sh
+0 3 * * * /home/loki/projects/tender/scripts/cron_documents.sh
 ```
 
 ## Data Model

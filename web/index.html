@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Italian Tender Intelligence System</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            padding: 30px;
+            background: #f8f9fa;
+        }
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        .stat-card h3 {
+            color: #667eea;
+            font-size: 2.5em;
+            margin-bottom: 5px;
+        }
+        .stat-card p {
+            color: #666;
+            font-size: 0.9em;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .content {
+            padding: 30px;
+        }
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #e0e0e0;
+            flex-wrap: wrap;
+        }
+        .tab {
+            padding: 15px 25px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            color: #666;
+            border-bottom: 3px solid transparent;
+        }
+        .tab.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .search-box {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .search-box input {
+            flex: 1;
+            padding: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+        }
+        .search-box input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        .search-box button, .btn {
+            padding: 15px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        .search-box button:hover, .btn:hover {
+            opacity: 0.9;
+        }
+        .filters {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .filters input, .filters select {
+            padding: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+        .results {
+            margin-top: 20px;
+        }
+        .tender-card {
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 15px;
+            transition: all 0.3s;
+        }
+        .tender-card:hover {
+            border-color: #667eea;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+        }
+        .tender-card h3 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 1.3em;
+        }
+        .tender-card .meta {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+        }
+        .tender-card .meta span {
+            color: #666;
+            font-size: 0.9em;
+        }
+        .tender-card .meta strong {
+            color: #667eea;
+        }
+        .tender-card .summary {
+            color: #555;
+            line-height: 1.6;
+            margin-bottom: 10px;
+        }
+        .tender-card a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 600;
+        }
+        .tender-card a:hover {
+            text-decoration: underline;
+        }
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: 600;
+            margin-right: 5px;
+        }
+        .badge-services { background: #e3f2fd; color: #1976d2; }
+        .badge-works { background: #fff3e0; color: #f57c00; }
+        .badge-supplies { background: #f3e5f5; color: #7b1fa2; }
+        .badge-nuts { background: #e8f5e9; color: #388e3c; }
+        .badge-cpv { background: #fff9c4; color: #f57f17; }
+        .badge-eu { background: #e1f5fe; color: #0277bd; }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            margin-top: 20px;
+            padding: 20px;
+        }
+        .pagination button {
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        .pagination button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .pagination span {
+            color: #666;
+        }
+        .lots-section {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 10px;
+        }
+        .lots-section h4 {
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+        .lot-item {
+            background: white;
+            padding: 10px;
+            margin-bottom: 8px;
+            border-radius: 6px;
+            border-left: 3px solid #667eea;
+        }
+        .issuer-card, .doc-card {
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+        .issuer-card h4, .doc-card h4 {
+            color: #333;
+            margin-bottom: 8px;
+        }
+        .issuer-card p, .doc-card p {
+            color: #666;
+            font-size: 0.9em;
+            margin-bottom: 5px;
+        }
+        .portal-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        .portal-table th, .portal-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        .portal-table th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #333;
+        }
+        .log-section {
+            background: #1e1e1e;
+            color: #00ff00;
+            padding: 20px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .log-line {
+            margin-bottom: 5px;
+        }
+        .job-status {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .job-card {
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            padding: 20px;
+        }
+        .job-card h3 {
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🇮🇹 Italian Tender Intelligence</h1>
+            <p>AI-Powered Public Procurement Search & Matching</p>
+        </div>
+
+        <div class="stats" id="stats">
+            <div class="stat-card">
+                <h3 id="stat-tenders">-</h3>
+                <p>Tenders</p>
+            </div>
+            <div class="stat-card">
+                <h3 id="stat-orgs">-</h3>
+                <p>Organizations</p>
+            </div>
+            <div class="stat-card">
+                <h3 id="stat-issuers">-</h3>
+                <p>Issuers</p>
+            </div>
+            <div class="stat-card">
+                <h3 id="stat-docs">-</h3>
+                <p>Documents</p>
+            </div>
+        </div>
+
+        <div class="content">
+            <div class="tabs">
+                <button class="tab active" onclick="showTab('search')">🔍 Search</button>
+                <button class="tab" onclick="showTab('tenders')">📋 All Tenders</button>
+                <button class="tab" onclick="showTab('organizations')">🏢 Organizations</button>
+                <button class="tab" onclick="showTab('issuers')">🏛️ Issuers</button>
+                <button class="tab" onclick="showTab('documents')">📄 Documents</button>
+                <button class="tab" onclick="showTab('portals')">🌐 Portal Analysis</button>
+                <button class="tab" onclick="showTab('jobs')">⚙️ System Jobs</button>
+            </div>
+
+            <div id="search-tab" class="tab-content active">
+                <h2>Hybrid Search (Semantic + Filters)</h2>
+                <div class="search-box">
+                    <input type="text" id="search-query" placeholder="Search tenders... (e.g., 'road maintenance services')" />
+                    <button onclick="searchTenders()">Search</button>
+                </div>
+                <div class="filters">
+                    <input type="number" id="min-value" placeholder="Min Value (€)" />
+                    <input type="number" id="max-value" placeholder="Max Value (€)" />
+                    <select id="contract-type">
+                        <option value="">All Contract Types</option>
+                        <option value="services">Services</option>
+                        <option value="works">Works</option>
+                        <option value="supplies">Supplies</option>
+                    </select>
+                    <input type="text" id="nuts-code" placeholder="NUTS Code (e.g., ITC4C)" />
+                    <input type="text" id="cpv-code" placeholder="CPV Code (e.g., 45233140-2)" />
+                    <input type="text" id="issuer-name" placeholder="Issuer Name" />
+                    <input type="date" id="start-date" placeholder="Start Date" />
+                    <input type="date" id="end-date" placeholder="End Date" />
+                    <input type="text" id="keyword" placeholder="Keyword Search" />
+                </div>
+                <div id="search-results" class="results"></div>
+                <div id="search-pagination" class="pagination"></div>
+            </div>
+
+            <div id="tenders-tab" class="tab-content">
+                <h2>All Tenders</h2>
+                <div id="all-tenders" class="results"></div>
+                <div id="tenders-pagination" class="pagination"></div>
+            </div>
+
+            <div id="organizations-tab" class="tab-content">
+                <h2>Organizations</h2>
+                <div id="organizations-list"></div>
+            </div>
+
+            <div id="issuers-tab" class="tab-content">
+                <h2>Issuing Authorities</h2>
+                <div id="issuers-list"></div>
+                <div id="issuers-pagination" class="pagination"></div>
+            </div>
+
+            <div id="documents-tab" class="tab-content">
+                <h2>Downloaded Documents</h2>
+                <div id="documents-list"></div>
+                <div id="documents-pagination" class="pagination"></div>
+            </div>
+
+            <div id="portals-tab" class="tab-content">
+                <h2>Document Portal Analysis</h2>
+                <div id="portal-analysis"></div>
+            </div>
+
+            <div id="jobs-tab" class="tab-content">
+                <h2>System Jobs Status</h2>
+                <div id="jobs-status"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentSearchPage = 1;
+        let currentTendersPage = 1;
+        let currentIssuersPage = 1;
+        let currentDocsPage = 1;
+
+        async function loadStats() {
+            const response = await fetch('/api/status');
+            const data = await response.json();
+            document.getElementById('stat-tenders').textContent = data.tenders;
+            document.getElementById('stat-orgs').textContent = data.organizations;
+            document.getElementById('stat-issuers').textContent = data.issuers;
+            document.getElementById('stat-docs').textContent = data.documents;
+        }
+
+        async function searchTenders(page = 1) {
+            const query = document.getElementById('search-query').value;
+            if (!query) return;
+
+            const resultsDiv = document.getElementById('search-results');
+            resultsDiv.innerHTML = '<div class="loading">🔍 Searching...</div>';
+
+            const request = {
+                query: query,
+                min_value: document.getElementById('min-value').value || null,
+                max_value: document.getElementById('max-value').value || null,
+                contract_type: document.getElementById('contract-type').value || null,
+                nuts_codes: document.getElementById('nuts-code').value || null,
+                cpv_codes: document.getElementById('cpv-code').value || null,
+                issuer_name: document.getElementById('issuer-name').value || null,
+                start_date: document.getElementById('start-date').value || null,
+                end_date: document.getElementById('end-date').value || null,
+                keyword: document.getElementById('keyword').value || null,
+                page: page,
+                page_size: 20
+            };
+
+            const response = await fetch('/api/search', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(request)
+            });
+
+            const data = await response.json();
+            currentSearchPage = page;
+            displayTenders(data.results, resultsDiv);
+            displayPagination(data, 'search-pagination', searchTenders);
+        }
+
+        async function loadAllTenders(page = 1) {
+            const response = await fetch(`/api/tenders?page=${page}&page_size=20`);
+            const data = await response.json();
+            currentTendersPage = page;
+            displayTenders(data.tenders, document.getElementById('all-tenders'));
+            displayPagination(data, 'tenders-pagination', loadAllTenders);
+        }
+
+        function displayTenders(tenders, container) {
+            if (tenders.length === 0) {
+                container.innerHTML = '<div class="loading">No results found</div>';
+                return;
+            }
+
+            container.innerHTML = tenders.map(tender => `
+                <div class="tender-card">
+                    <h3>${tender.title}</h3>
+                    <div class="meta">
+                        <span><strong>ID:</strong> ${tender.tender_id}</span>
+                        ${tender.estimated_value ? `<span><strong>Value:</strong> €${tender.estimated_value.toLocaleString()}</span>` : ''}
+                        ${tender.contract_type ? `<span class="badge badge-${tender.contract_type}">${tender.contract_type}</span>` : ''}
+                        ${tender.similarity_score ? `<span><strong>Match:</strong> ${(tender.similarity_score * 100).toFixed(1)}%</span>` : ''}
+                        ${tender.eu_funded ? '<span class="badge badge-eu">EU Funded</span>' : ''}
+                        ${tender.renewable ? '<span class="badge">Renewable</span>' : ''}
+                    </div>
+                    ${tender.summary ? `<div class="summary">${tender.summary}</div>` : ''}
+                    <div class="meta">
+                        ${tender.publication_date ? `<span>📅 Published: ${tender.publication_date}</span>` : ''}
+                        ${tender.submission_deadline ? `<span>⏰ Deadline: ${tender.submission_deadline}</span>` : ''}
+                    </div>
+                    ${tender.execution_location ? `<div class="meta"><span>📍 <strong>Location:</strong> ${tender.execution_location}</span></div>` : ''}
+                    ${tender.nuts_codes && tender.nuts_codes.length > 0 ? `<div class="meta">${tender.nuts_codes.map(code => `<span class="badge badge-nuts">NUTS: ${code}</span>`).join('')}</div>` : ''}
+                    ${tender.cpv_codes && tender.cpv_codes.length > 0 ? `<div class="meta">${tender.cpv_codes.map(code => `<span class="badge badge-cpv">CPV: ${code}</span>`).join('')}</div>` : ''}
+                    ${tender.has_lots && tender.lots_data ? `
+                        <div class="lots-section">
+                            <h4>📦 Lots (Max ${tender.lots_data.max_lots_per_bidder || 'unlimited'} per bidder)</h4>
+                            ${tender.lots_data.lots ? tender.lots_data.lots.map(lot => `
+                                <div class="lot-item">
+                                    <strong>Lot ${lot.lot_id}:</strong> ${lot.description} - €${lot.value.toLocaleString()}
+                                </div>
+                            `).join('') : ''}
+                        </div>
+                    ` : ''}
+                    ${tender.tender_url ? `<a href="${tender.tender_url}" target="_blank">View Tender →</a>` : ''}
+                </div>
+            `).join('');
+        }
+
+        function displayPagination(data, containerId, loadFunc) {
+            const container = document.getElementById(containerId);
+            if (!data.total_pages || data.total_pages <= 1) {
+                container.innerHTML = '';
+                return;
+            }
+
+            container.innerHTML = `
+                <button onclick="${loadFunc.name}(${data.page - 1})" ${data.page === 1 ? 'disabled' : ''}>← Previous</button>
+                <span>Page ${data.page} of ${data.total_pages} (${data.total} total)</span>
+                <button onclick="${loadFunc.name}(${data.page + 1})" ${data.page === data.total_pages ? 'disabled' : ''}>Next →</button>
+            `;
+        }
+
+        async function loadOrganizations() {
+            const response = await fetch('/api/organizations');
+            const orgs = await response.json();
+            
+            const container = document.getElementById('organizations-list');
+            container.innerHTML = orgs.map(org => `
+                <div class="issuer-card">
+                    <h4>${org.name}</h4>
+                    <p>Tax ID: ${org.tax_id}</p>
+                    ${org.region ? `<p>📍 ${org.region}</p>` : ''}
+                </div>
+            `).join('');
+        }
+
+        async function loadIssuers(page = 1) {
+            const response = await fetch(`/api/issuers?page=${page}&page_size=20`);
+            const data = await response.json();
+            currentIssuersPage = page;
+            
+            const container = document.getElementById('issuers-list');
+            container.innerHTML = data.issuers.map(issuer => `
+                <div class="issuer-card">
+                    <h4>${issuer.name}</h4>
+                    <p><strong>ID:</strong> ${issuer.issuer_id}</p>
+                    ${issuer.contact_email ? `<p>📧 ${issuer.contact_email}</p>` : ''}
+                    ${issuer.contact_phone ? `<p>📞 ${issuer.contact_phone}</p>` : ''}
+                    <p>📍 ${issuer.city}, ${issuer.region}</p>
+                    ${issuer.nuts_code ? `<p><span class="badge badge-nuts">NUTS: ${issuer.nuts_code}</span></p>` : ''}
+                    <p><strong>${issuer.tender_count}</strong> tenders</p>
+                </div>
+            `).join('');
+            
+            displayPagination(data, 'issuers-pagination', loadIssuers);
+        }
+
+        async function loadDocuments(page = 1) {
+            const response = await fetch(`/api/documents?page=${page}&page_size=20`);
+            const data = await response.json();
+            currentDocsPage = page;
+            
+            const container = document.getElementById('documents-list');
+            if (data.documents.length === 0) {
+                container.innerHTML = '<div class="loading">No documents downloaded yet</div>';
+                return;
+            }
+            
+            container.innerHTML = data.documents.map(doc => `
+                <div class="doc-card">
+                    <h4>📄 ${doc.filename}</h4>
+                    <p><strong>Type:</strong> ${doc.document_type || 'Unknown'}</p>
+                    ${doc.file_size ? `<p><strong>Size:</strong> ${(doc.file_size / 1024).toFixed(2)} KB</p>` : ''}
+                    <p><strong>Tender:</strong> ${doc.tender_title} (${doc.tender_id})</p>
+                    ${doc.download_date ? `<p><strong>Downloaded:</strong> ${doc.download_date}</p>` : ''}
+                    ${doc.storage_url ? `<button class="btn" onclick="downloadDocument(${doc.id}, '${doc.filename}')">Download</button>` : ''}
+                </div>
+            `).join('');
+            
+            displayPagination(data, 'documents-pagination', loadDocuments);
+        }
+
+        async function downloadDocument(docId, filename) {
+            window.open(`/api/documents/download/${docId}`, '_blank');
+        }
+
+        async function loadPortalAnalysis() {
+            const response = await fetch('/api/portal-analysis');
+            const data = await response.json();
+            
+            const container = document.getElementById('portal-analysis');
+            container.innerHTML = `
+                <p><strong>Total tenders with document portals:</strong> ${data.total_tenders}</p>
+                <table class="portal-table">
+                    <thead>
+                        <tr>
+                            <th>Portal Domain</th>
+                            <th>Tender Count</th>
+                            <th>Percentage</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${data.portals.map(portal => `
+                            <tr>
+                                <td>${portal.portal}</td>
+                                <td>${portal.count}</td>
+                                <td>${portal.percentage}%</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        async function loadJobStatus() {
+            const response = await fetch('/api/jobs/status');
+            const data = await response.json();
+            
+            const container = document.getElementById('jobs-status');
+            container.innerHTML = `
+                <div class="job-status">
+                    <div class="job-card">
+                        <h3>📥 Tender Ingestion</h3>
+                        <p><strong>Schedule:</strong> ${data.cron_schedule.ingestion}</p>
+                        <p><strong>Last Run:</strong> ${data.ingestion.last_run || 'Never'}</p>
+                    </div>
+                    <div class="job-card">
+                        <h3>📄 Document Downloads</h3>
+                        <p><strong>Schedule:</strong> ${data.cron_schedule.documents}</p>
+                        <p><strong>Last Run:</strong> ${data.documents.last_run || 'Never'}</p>
+                    </div>
+                </div>
+                
+                <h3>Recent Ingestion Logs</h3>
+                <div class="log-section">
+                    ${data.ingestion.recent_logs.length > 0 ? 
+                        data.ingestion.recent_logs.map(log => `<div class="log-line">${log}</div>`).join('') :
+                        '<div class="log-line">No logs available</div>'}
+                </div>
+                
+                <h3 style="margin-top: 20px;">Recent Document Download Logs</h3>
+                <div class="log-section">
+                    ${data.documents.recent_logs.length > 0 ? 
+                        data.documents.recent_logs.map(log => `<div class="log-line">${log}</div>`).join('') :
+                        '<div class="log-line">No logs available</div>'}
+                </div>
+            `;
+        }
+
+        function showTab(tabName) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            
+            event.target.classList.add('active');
+            document.getElementById(tabName + '-tab').classList.add('active');
+
+            if (tabName === 'tenders') loadAllTenders();
+            if (tabName === 'organizations') loadOrganizations();
+            if (tabName === 'issuers') loadIssuers();
+            if (tabName === 'documents') loadDocuments();
+            if (tabName === 'portals') loadPortalAnalysis();
+            if (tabName === 'jobs') loadJobStatus();
+        }
+
+        document.getElementById('search-query').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') searchTenders();
+        });
+
+        loadStats();
+        loadAllTenders();
+    </script>
+</body>
+</html>

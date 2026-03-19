@@ -13,6 +13,12 @@ class Config:
     S3_SECRET_KEY = os.getenv('S3_SECRET_KEY')
     S3_BUCKET = os.getenv('S3_BUCKET', 'tender-documents')
     
+    MINIO_ENDPOINT = os.getenv('MINIO_ENDPOINT', 'localhost:9000')
+    MINIO_ACCESS_KEY = os.getenv('MINIO_ACCESS_KEY', 'minioadmin')
+    MINIO_SECRET_KEY = os.getenv('MINIO_SECRET_KEY', 'minioadmin')
+    MINIO_BUCKET = os.getenv('MINIO_BUCKET', 'tender-documents')
+    MINIO_SECURE = os.getenv('MINIO_SECURE', 'false').lower() == 'true'
+    
     LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
     INGESTION_DAYS_BACK = int(os.getenv('INGESTION_DAYS_BACK', '30'))
     

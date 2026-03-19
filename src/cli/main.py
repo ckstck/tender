@@ -174,14 +174,29 @@ def analyze_portals(output):
         click.echo("\nNo document portals found in database.")
 
 @cli.command()
-@click.option('--portal', required=True, help='Portal domain to download from')
+@click.option('--portal', help='Portal domain to download from')
+@click.option('--auto-detect', is_flag=True, help='Auto-detect top portal')
 @click.option('--limit', default=10, help='Number of tenders to process')
-def download_docs(portal, limit):
-    """Download documents from a portal"""
-    click.echo(f"Processing documents from {portal}...")
+def download_docs(portal, auto_detect, limit):
+    """Download documents from a portal with real implementation"""
+    if not portal and not auto_detect:
+        click.echo("Error: Either --portal or --auto-detect must be specified")
+        return
+    
+    if auto_detect:
+        click.echo("Auto-detecting top portal...")
+    else:
+        click.echo(f"Processing documents from {portal}...")
+    
     downloader = DocumentDownloader()
-    count = downloader.download_for_portal(portal, limit=limit)
-    click.echo(f"\n✓ Processed {count} tenders from {portal}")
+    count = downloader.download_for_portal(portal, limit=limit, auto_detect=auto_detect)
+    
+    if auto_detect and count > 0:
+        click.echo(f"\n✓ Processed {count} tenders")
+    elif count > 0:
+        click.echo(f"\n✓ Processed {count} tenders from {portal}")
+    else:
+        click.echo("\n⚠ No documents processed")
 
 @cli.command()
 def status():

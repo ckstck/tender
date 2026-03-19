@@ -16,15 +16,18 @@ class ANACClient:
         if self.api_key:
             self.session.headers.update({'Authorization': f'Bearer {self.api_key}'})
     
-    def fetch_tenders(self, days_back: int = 30) -> List[Dict]:
+    def fetch_tenders(self, days_back: int = 30, fetch_all: bool = False) -> List[Dict]:
         """
-        Fetch tenders from ANAC API for the last N days.
+        Fetch tenders from ANAC API for the last N days or all historical data.
         Falls back to mock data if API is unavailable.
         """
-        logger.info(f"Fetching tenders from last {days_back} days")
+        if fetch_all:
+            logger.info("Fetching all historical tenders")
+        else:
+            logger.info(f"Fetching tenders from last {days_back} days")
         
         try:
-            tenders = self._fetch_from_api(days_back)
+            tenders = self._fetch_from_api(days_back, fetch_all)
             if tenders:
                 logger.info(f"Fetched {len(tenders)} tenders from API")
                 return tenders
@@ -33,18 +36,17 @@ class ANACClient:
         
         return self._load_mock_tenders()
     
-    def _fetch_from_api(self, days_back: int) -> List[Dict]:
+    def _fetch_from_api(self, days_back: int, fetch_all: bool = False) -> List[Dict]:
         """
         Attempt to fetch from ANAC API.
         Returns empty list if unavailable.
         """
-        date_from = (datetime.now() - timedelta(days=days_back)).strftime('%Y-%m-%d')
-        
         endpoint = f"{self.base_url}/tenders"
-        params = {
-            'date_from': date_from,
-            'format': 'json'
-        }
+        params = {'format': 'json'}
+        
+        if not fetch_all:
+            date_from = (datetime.now() - timedelta(days=days_back)).strftime('%Y-%m-%d')
+            params['date_from'] = date_from
         
         response = self.session.get(endpoint, params=params, timeout=10)
         
