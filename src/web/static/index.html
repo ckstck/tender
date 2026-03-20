@@ -1,0 +1,1016 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Italian Tender Intelligence - Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+
+  <body class="min-h-screen bg-slate-200 text-slate-900 overflow-y-auto md:overflow-hidden">
+    <div class="min-h-screen">
+      <!-- Sidebar -->
+      <aside class="hidden md:flex fixed top-0 left-0 h-screen w-64 flex-col bg-slate-900 text-slate-100 border-r border-white/10">
+        <div class="px-5 pt-6 pb-4">
+          <div class="flex items-center gap-3">
+            <div class="h-10 w-10 rounded-2xl bg-blue-600 shadow-sm"></div>
+            <div class="leading-tight">
+              <div class="font-semibold text-sm tracking-wide">Tender Intelligence</div>
+              <div class="text-xs text-slate-400">SaaS dashboard</div>
+            </div>
+          </div>
+        </div>
+
+        <nav class="px-3 pb-6 space-y-2">
+          <button
+            id="nav-status"
+            data-nav="status"
+            class="nav w-full flex items-center gap-3 rounded-xl px-3 py-2 text-sm bg-white/0 border border-transparent hover:bg-white/10 transition"
+            onclick="ui.go('status')"
+          >
+            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 12h2.5l2-5 3.5 10 2-5H21" />
+            </svg>
+            Status
+          </button>
+          <button
+            id="nav-actions"
+            data-nav="actions"
+            class="nav w-full flex items-center gap-3 rounded-xl px-3 py-2 text-sm bg-white/0 border border-transparent hover:bg-white/10 transition"
+            onclick="ui.go('actions')"
+          >
+            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 2v4" />
+              <path d="M17 5l-2 2" />
+              <path d="M22 12h-4" />
+              <path d="M17 19l-2-2" />
+              <path d="M12 22v-4" />
+              <path d="M7 19l2-2" />
+              <path d="M2 12h4" />
+              <path d="M7 5l2 2" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+            Actions
+          </button>
+          <button
+            id="nav-search"
+            data-nav="search"
+            class="nav w-full flex items-center gap-3 rounded-xl px-3 py-2 text-sm bg-white/0 border border-transparent hover:bg-white/10 transition"
+            onclick="ui.openSearchModal()"
+          >
+            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="7" />
+              <path d="M21 21l-4.3-4.3" />
+            </svg>
+            Search
+          </button>
+          <button
+            id="nav-jobs"
+            data-nav="jobs"
+            class="nav w-full flex items-center gap-3 rounded-xl px-3 py-2 text-sm bg-white/0 border border-transparent hover:bg-white/10 transition"
+            onclick="ui.go('jobs')"
+          >
+            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 6v6l4 2" />
+              <path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+            </svg>
+            Job Monitor
+          </button>
+        </nav>
+      </aside>
+
+      <!-- Mobile wrapper -->
+      <div class="flex-1 flex flex-col md:min-w-0 md:ml-64 md:h-screen md:overflow-y-auto">
+        <!-- Header -->
+        <header class="sticky top-0 z-30 bg-white/90 backdrop-blur border-b border-slate-300">
+          <div class="px-4 sm:px-6 py-4 flex items-center justify-between gap-4">
+            <div>
+              <h1 class="text-xl font-semibold">Dashboard</h1>
+              <p class="text-sm text-slate-500">Run pipelines, inspect jobs, and search tenders</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <button class="px-3 py-2 rounded-xl text-sm border border-slate-300 bg-white hover:bg-slate-50 transition" onclick="ui.fetchStatus()">
+                Refresh
+              </button>
+              <button class="hidden sm:inline-flex px-3 py-2 rounded-xl text-sm bg-blue-600 text-white hover:bg-blue-700 transition" onclick="ui.runAction('ingest')">
+                Quick Ingest
+              </button>
+            </div>
+          </div>
+
+          <!-- Status strip -->
+          <div id="statusStrip" class="px-4 sm:px-6 pb-4">
+              <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
+              <div class="bg-white rounded-2xl border border-slate-300 shadow-md p-3">
+                <div class="text-xs text-slate-500">Tenders</div>
+                <div id="st-tenders" class="text-lg font-semibold">—</div>
+              </div>
+              <div class="bg-white rounded-2xl border border-slate-300 shadow-md p-3">
+                <div class="text-xs text-slate-500">Organizations</div>
+                <div id="st-orgs" class="text-lg font-semibold">—</div>
+              </div>
+              <div class="bg-white rounded-2xl border border-slate-300 shadow-md p-3">
+                <div class="text-xs text-slate-500">Issuers</div>
+                <div id="st-issuers" class="text-lg font-semibold">—</div>
+              </div>
+              <div class="bg-white rounded-2xl border border-slate-300 shadow-md p-3">
+                <div class="text-xs text-slate-500">Documents</div>
+                <div id="st-docs" class="text-lg font-semibold">—</div>
+              </div>
+              <div class="bg-white rounded-2xl border border-slate-300 shadow-md p-3">
+                <div class="text-xs text-slate-500">Search Queries</div>
+                <div id="st-search" class="text-lg font-semibold">—</div>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <!-- Main content -->
+        <main class="flex-1 px-4 sm:px-6 py-8">
+          <div class="max-w-6xl mx-auto space-y-10">
+            <!-- Primary Actions -->
+            <section id="actions" class="space-y-5">
+              <div class="flex items-end justify-between gap-4">
+                <div>
+                  <h2 class="text-lg font-semibold text-slate-900">Primary Actions</h2>
+                  <p class="text-sm text-slate-500">Most-used pipelines (runs in background)</p>
+                </div>
+                <div class="text-xs text-slate-500">
+                  Jobs are tracked in memory and displayed below.
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <!-- Ingest -->
+                <div class="bg-white rounded-2xl shadow-md border border-slate-300 p-6">
+                  <div class="flex items-start justify-between gap-4">
+                    <div>
+                      <div class="text-base font-semibold">Ingest Tenders</div>
+                      <div class="text-sm text-slate-500 mt-1">Fetch tenders and generate AI summary + embeddings.</div>
+                    </div>
+                    <div class="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 text-blue-700 px-3 py-1 text-xs">
+                      Background
+                    </div>
+                  </div>
+
+                  <div class="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label class="text-sm text-slate-700">Start date</label>
+                      <input id="ingest-start-date" type="date" class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 outline-none focus:ring-2 focus:ring-blue-200" />
+                    </div>
+                    <div>
+                      <label class="text-sm text-slate-700">End date</label>
+                      <input id="ingest-end-date" type="date" class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 outline-none focus:ring-2 focus:ring-blue-200" />
+                    </div>
+                    <div class="sm:col-span-2 flex items-end justify-between gap-3">
+                      <p id="ingest-range-error" class="text-xs text-red-600 min-h-4"></p>
+                      <button id="ingest-run-btn" class="w-full sm:w-auto px-4 py-2 rounded-xl bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition text-sm font-medium" onclick="ui.runAction('ingest')">
+                        Run ingest
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Extract Orgs -->
+                <div class="bg-white rounded-2xl shadow-md border border-slate-300 p-6">
+                  <div class="flex items-start justify-between gap-4">
+                    <div>
+                      <div class="text-base font-semibold">Extract Organizations</div>
+                      <div class="text-sm text-slate-500 mt-1">Parse participants and deduplicate by tax ID.</div>
+                    </div>
+                    <div class="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 text-blue-700 px-3 py-1 text-xs">
+                      Background
+                    </div>
+                  </div>
+
+                  <div class="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label class="text-sm text-slate-700">Start date</label>
+                      <input id="org-start-date" type="date" class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 outline-none focus:ring-2 focus:ring-blue-200" />
+                    </div>
+                    <div>
+                      <label class="text-sm text-slate-700">End date</label>
+                      <input id="org-end-date" type="date" class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 outline-none focus:ring-2 focus:ring-blue-200" />
+                    </div>
+                    <div class="sm:col-span-2 flex items-end justify-between gap-3">
+                      <p id="org-range-error" class="text-xs text-red-600 min-h-4"></p>
+                      <button id="org-run-btn" class="w-full sm:w-auto px-4 py-2 rounded-xl bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition text-sm font-medium" onclick="ui.runAction('extract-orgs')">
+                        Run extraction
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <!-- Secondary Actions -->
+            <section id="secondary" class="space-y-5 mt-10">
+              <div>
+                <h2 class="text-lg font-semibold text-slate-900">Secondary Actions</h2>
+                <p class="text-sm text-slate-500 mt-1">Less frequent workflows</p>
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <!-- Analyze Portals -->
+                <div class="bg-white rounded-2xl shadow-md border border-slate-300 p-6">
+                  <div class="text-base font-semibold">Analyze Portals</div>
+                  <div class="text-sm text-slate-500 mt-1">Create `portal_analysis.csv` from stored portal URLs.</div>
+
+                  <div class="mt-5">
+                    <label class="text-sm text-slate-700">Output filename</label>
+                    <input id="portal-output" type="text" value="portal_analysis.csv" class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 outline-none focus:ring-2 focus:ring-blue-200" />
+                  </div>
+
+                  <div class="mt-5">
+                    <button class="w-full px-4 py-2 rounded-xl bg-blue-600 text-white hover:bg-blue-700 transition text-sm font-medium" onclick="ui.runAction('analyze-portals')">
+                      Run analysis
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Download Docs -->
+                <div class="bg-white rounded-2xl shadow-md border border-slate-300 p-6">
+                  <div class="text-base font-semibold">Download Documents</div>
+                  <div class="text-sm text-slate-500 mt-1">Download from a single portal (MVP limitation).</div>
+
+                  <div class="mt-5">
+                    <label class="text-sm text-slate-700">Portal domain</label>
+                    <input id="download-portal" type="text" value="portale-documenti.comune.milano.it" class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 outline-none focus:ring-2 focus:ring-blue-200" />
+                  </div>
+                  <div class="mt-4">
+                    <label class="text-sm text-slate-700">Limit</label>
+                    <input id="download-limit" type="number" min="1" value="10" class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 outline-none focus:ring-2 focus:ring-blue-200" />
+                  </div>
+
+                  <div class="mt-5">
+                    <button class="w-full px-4 py-2 rounded-xl bg-blue-600 text-white hover:bg-blue-700 transition text-sm font-medium" onclick="ui.runAction('download-docs')">
+                      Run download
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <!-- Job Monitor -->
+            <section id="jobs" class="space-y-4 mt-10">
+              <div class="flex items-end justify-between gap-4">
+                <div>
+                  <h2 class="text-lg font-semibold text-slate-900">Job Monitor</h2>
+                  <p class="text-sm text-slate-500 mt-1">Background logs (live)</p>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button class="px-3 py-2 rounded-xl text-sm border border-slate-200 bg-white hover:bg-slate-50 transition" onclick="ui.refreshJobs()">
+                    Refresh jobs
+                  </button>
+                </div>
+              </div>
+
+              <div class="bg-white rounded-2xl shadow-md border border-slate-300 p-5">
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+                  <div class="lg:col-span-4">
+                    <div class="text-sm font-semibold">Active job</div>
+                    <div class="text-sm text-slate-500 mt-1">Choose a job to see logs.</div>
+
+                    <div class="mt-4">
+                      <label class="text-sm text-slate-700">Job</label>
+                      <select id="job-select" class="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 outline-none focus:ring-2 focus:ring-blue-200">
+                        <option value="">Loading…</option>
+                      </select>
+                    </div>
+
+                    <div class="mt-4 grid grid-cols-4 gap-3">
+                      <div class="rounded-xl bg-slate-50 border border-slate-200 p-3">
+                        <div class="flex items-center justify-between gap-3">
+                          <div class="text-xs text-slate-500">Status</div>
+                          <span
+                            id="job-state-badge"
+                            class="inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-xs text-slate-700"
+                          >
+                            Idle
+                          </span>
+                        </div>
+                        <div id="job-status" class="text-sm font-semibold mt-1">—</div>
+                      </div>
+                      <div class="rounded-xl bg-slate-50 border border-slate-200 p-3">
+                        <div class="text-xs text-slate-500">Exit</div>
+                        <div id="job-exit" class="text-sm font-semibold mt-1">—</div>
+                      </div>
+                      <div class="rounded-xl bg-slate-50 border border-slate-200 p-3">
+                        <div class="text-xs text-slate-500">Started</div>
+                        <div id="job-started" class="text-sm font-semibold mt-1">—</div>
+                      </div>
+                      <div class="rounded-xl bg-slate-50 border border-slate-200 p-3">
+                        <div class="text-xs text-slate-500">Duration & Stats</div>
+                        <div id="job-summary" class="text-sm font-semibold mt-1">—</div>
+                      </div>
+                    </div>
+
+                    <div class="mt-4">
+                      <button id="job-reload" class="w-full px-4 py-2 rounded-xl bg-white border border-slate-300 hover:bg-slate-50 transition text-sm font-medium" onclick="ui.refreshSelectedJob()">
+                        Reload logs
+                      </button>
+                    </div>
+                    <div class="mt-2">
+                      <button id="job-stop-btn" class="w-full px-4 py-2 rounded-xl bg-white border border-red-300 text-red-700 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed transition text-sm font-medium" onclick="ui.stopSelectedJob()">
+                        Stop Job
+                      </button>
+                    </div>
+                  </div>
+
+                  <div class="lg:col-span-8">
+                    <div class="flex items-center justify-between">
+                      <div class="text-sm font-semibold">Log Panel</div>
+                      <div class="text-xs text-slate-500">Monospace • scrollable</div>
+                    </div>
+
+                    <!-- Spinner row above logs (stable layout, no layout shifting). -->
+                    <div class="h-6 mt-2 flex items-center justify-end">
+                      <div
+                        id="jobLogSpinner"
+                        class="opacity-0 h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-blue-600"
+                        aria-hidden="true"
+                      ></div>
+                    </div>
+
+                    <div
+                      class="mt-2 rounded-2xl bg-slate-950 text-slate-100 border border-slate-800 p-4 max-h-96 min-h-48 overflow-y-auto font-mono text-xs"
+                      id="job-log-panel"
+                      style="white-space: pre-wrap;"
+                    >
+                      —
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+        </main>
+      </div>
+    </div>
+
+    <!-- Search Modal -->
+    <div id="searchModal" class="fixed inset-0 z-50 hidden">
+      <div class="absolute inset-0 bg-black/50" onclick="ui.closeSearchModal()"></div>
+      <div class="relative mx-auto mt-10 max-w-5xl">
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+          <div class="flex items-start justify-between gap-4 p-5 border-b border-slate-200">
+            <div>
+              <div class="text-lg font-semibold">Search Tenders</div>
+              <div class="text-sm text-slate-500 mt-1">Hybrid search (filters + pgvector ranking)</div>
+            </div>
+            <button class="px-3 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 transition" onclick="ui.closeSearchModal()">Close</button>
+          </div>
+
+          <div class="p-5">
+            <div class="flex flex-col lg:flex-row lg:items-end gap-3">
+              <div class="flex-1">
+                <label class="text-sm text-slate-700">Query</label>
+                <input
+                  id="search-query"
+                  type="text"
+                  placeholder="e.g. road maintenance services"
+                  class="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:ring-2 focus:ring-blue-200"
+                />
+              </div>
+              <div class="lg:w-44">
+                <label class="text-sm text-slate-700">Limit</label>
+                <input id="search-limit" type="number" min="1" value="10" class="mt-2 w-full rounded-xl border border-slate-200 px-3 py-3 outline-none focus:ring-2 focus:ring-blue-200" />
+              </div>
+              <button id="searchBtn" class="lg:w-44 px-4 py-3 rounded-xl bg-blue-600 text-white hover:bg-blue-700 transition text-sm font-medium" onclick="ui.doSearch()">
+                Search
+              </button>
+            </div>
+
+            <div class="mt-5 grid grid-cols-1 md:grid-cols-12 gap-5">
+              <div class="md:col-span-4">
+                <div class="rounded-2xl bg-slate-50 border border-slate-200 p-4">
+                  <div class="text-sm font-semibold">Filters</div>
+                  <div class="text-xs text-slate-500 mt-1">Optional</div>
+
+                  <div class="mt-4 space-y-3">
+                    <div>
+                      <label class="text-sm text-slate-700">Min value (€)</label>
+                      <input id="search-min" type="number" step="0.01" class="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none focus:ring-2 focus:ring-blue-200" />
+                    </div>
+                    <div>
+                      <label class="text-sm text-slate-700">Max value (€)</label>
+                      <input id="search-max" type="number" step="0.01" class="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none focus:ring-2 focus:ring-blue-200" />
+                    </div>
+                    <div>
+                      <label class="text-sm text-slate-700">CPV code</label>
+                      <input id="search-cpv" type="text" class="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none focus:ring-2 focus:ring-blue-200" />
+                    </div>
+                    <div>
+                      <label class="text-sm text-slate-700">NUTS code</label>
+                      <input id="search-nuts" type="text" class="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none focus:ring-2 focus:ring-blue-200" />
+                    </div>
+                    <div>
+                      <label class="text-sm text-slate-700">Contract type</label>
+                      <input id="search-type" type="text" placeholder="services / supplies / works" class="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none focus:ring-2 focus:ring-blue-200" />
+                    </div>
+                    <div>
+                      <label class="text-sm text-slate-700">EU funded</label>
+                      <select id="search-eu" class="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none focus:ring-2 focus:ring-blue-200">
+                        <option value="">Any</option>
+                        <option value="true">True</option>
+                        <option value="false">False</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="md:col-span-8">
+                <div class="flex items-center justify-between">
+                  <div class="text-sm font-semibold">Results</div>
+                  <div id="searchStatus" class="text-xs text-slate-500"></div>
+                </div>
+                <div id="results" class="mt-3 grid grid-cols-1 gap-3">
+                  <!-- cards -->
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const ui = {
+        active: 'status',
+        selectedJobId: null,
+        currentJobId: null,
+        logState: 'idle', // idle | loading | stopping | stopped | success | error
+        logCursor: 0, // number of log lines already rendered
+        logPanelEl: null,
+
+        // ---------- Navigation ----------
+        go(section) {
+          ui.active = section;
+          // Update sidebar active styles.
+          const navButtons = document.querySelectorAll('.nav');
+          for (const b of navButtons) {
+            const target = b.getAttribute('data-nav');
+            const match = target === section;
+            b.classList.toggle('bg-white/5', match);
+            b.classList.toggle('border-white/15', match);
+          }
+
+          if (section === 'status') {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }
+          if (section === 'actions') {
+            document.getElementById('actions')?.scrollIntoView({ behavior: 'smooth' });
+          }
+          if (section === 'jobs') {
+            document.getElementById('jobs')?.scrollIntoView({ behavior: 'smooth' });
+          }
+        },
+
+        // ---------- Status ----------
+        async fetchStatus() {
+          const t = (id) => document.getElementById(id);
+          const set = (id, val) => { const el = t(id); if (el) el.innerText = val; };
+
+          set('st-tenders', '…');
+          set('st-orgs', '…');
+          set('st-issuers', '…');
+          set('st-docs', '…');
+          set('st-search', '…');
+
+          try {
+            const res = await fetch('/api/status', { headers: { 'Accept': 'application/json' } });
+            const data = await res.json();
+            set('st-tenders', data.tenders ?? 0);
+            set('st-orgs', data.organizations ?? 0);
+            set('st-issuers', data.issuers ?? 0);
+            set('st-docs', data.documents ?? 0);
+            set('st-search', data.search_queries ?? 0);
+          } catch (e) {
+            set('st-tenders', '—');
+            set('st-orgs', '—');
+            set('st-issuers', '—');
+            set('st-docs', '—');
+            set('st-search', '—');
+          }
+        },
+
+        // ---------- Actions ----------
+        parseRange(startId, endId) {
+          const start = (document.getElementById(startId)?.value || '').trim();
+          const end = (document.getElementById(endId)?.value || '').trim();
+          if (!start || !end) return { valid: false, error: 'Both dates are required.' };
+          if (start > end) return { valid: false, error: 'Start date must be before or equal to end date.' };
+          return { valid: true, start_date: start, end_date: end };
+        },
+        updateRangeUi({ startId, endId, buttonId, errorId }) {
+          const parsed = ui.parseRange(startId, endId);
+          const btn = document.getElementById(buttonId);
+          const err = document.getElementById(errorId);
+          if (btn) btn.disabled = !parsed.valid;
+          if (err) err.innerText = parsed.valid ? '' : parsed.error;
+          return parsed;
+        },
+        getIngestPayload() {
+          const parsed = ui.updateRangeUi({
+            startId: 'ingest-start-date',
+            endId: 'ingest-end-date',
+            buttonId: 'ingest-run-btn',
+            errorId: 'ingest-range-error',
+          });
+          if (!parsed.valid) throw new Error(parsed.error);
+          return { start_date: parsed.start_date, end_date: parsed.end_date };
+        },
+        getExtractPayload() {
+          const parsed = ui.updateRangeUi({
+            startId: 'org-start-date',
+            endId: 'org-end-date',
+            buttonId: 'org-run-btn',
+            errorId: 'org-range-error',
+          });
+          if (!parsed.valid) throw new Error(parsed.error);
+          return { start_date: parsed.start_date, end_date: parsed.end_date };
+        },
+        getAnalyzePayload() {
+          return { output: document.getElementById('portal-output').value || 'portal_analysis.csv' };
+        },
+        getDownloadPayload() {
+          return {
+            portal: document.getElementById('download-portal').value || '',
+            limit: parseInt(document.getElementById('download-limit').value || '10', 10),
+          };
+        },
+
+        async runAction(action) {
+          let payload = {};
+          if (action === 'ingest') payload = ui.getIngestPayload();
+          if (action === 'extract-orgs') payload = ui.getExtractPayload();
+          if (action === 'analyze-portals') payload = ui.getAnalyzePayload();
+          if (action === 'download-docs') payload = ui.getDownloadPayload();
+
+          const base = '/api/actions/' + action;
+
+          // Light loading feedback: disable primary buttons briefly.
+          const btn = document.activeElement;
+          try {
+            if (btn && typeof btn.disabled !== 'undefined') btn.disabled = true;
+
+            const res = await fetch(base, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload),
+            });
+            const data = await res.json();
+            if (!data.job_id) throw new Error('No job_id returned');
+
+            ui.selectedJobId = data.job_id;
+            await ui.refreshJobs();
+            ui.go('jobs');
+            await ui.refreshSelectedJob();
+          } catch (e) {
+            alert('Failed to start action: ' + String(e?.message || e));
+          } finally {
+            if (btn && typeof btn.disabled !== 'undefined') btn.disabled = false;
+          }
+        },
+
+        // ---------- Jobs ----------
+        async refreshJobs() {
+          const select = document.getElementById('job-select');
+          if (!select) return;
+
+          select.innerHTML = `<option value="">Loading…</option>`;
+          try {
+            const res = await fetch('/api/jobs?limit=20');
+            const data = await res.json();
+            const jobs = data.jobs || [];
+
+            if (!jobs.length) {
+              select.innerHTML = `<option value="">No jobs yet</option>`;
+              ui.selectedJobId = null;
+              ui.renderJobMeta(null, []);
+              return;
+            }
+
+            select.innerHTML = '';
+            for (const j of jobs) {
+              const opt = document.createElement('option');
+              opt.value = j.job_id;
+              opt.text = `${j.action} • ${j.status}`;
+              select.appendChild(opt);
+            }
+
+            if (ui.selectedJobId && jobs.some(j => j.job_id === ui.selectedJobId)) {
+              select.value = ui.selectedJobId;
+            } else {
+              ui.selectedJobId = jobs[0].job_id;
+              select.value = ui.selectedJobId;
+            }
+          } catch (e) {
+            select.innerHTML = `<option value="">Failed to load jobs</option>`;
+          }
+        },
+
+        async refreshSelectedJob() {
+          const select = document.getElementById('job-select');
+          const jobId = select?.value || ui.selectedJobId;
+          if (!jobId) {
+            ui.currentJobId = null;
+            ui.logCursor = 0;
+            ui.setLogState('idle');
+            const panel = document.getElementById('job-log-panel');
+            if (panel) panel.textContent = '—';
+            ui.renderJobMeta(null, []);
+            return;
+          }
+
+          // If this is a different job, clear logs and reset cursor.
+          if (ui.currentJobId !== jobId) {
+            ui.currentJobId = jobId;
+            ui.logCursor = 0;
+            ui.logPanelEl = document.getElementById('job-log-panel');
+            if (ui.logPanelEl) ui.logPanelEl.textContent = '';
+            ui.setLogState('loading');
+          }
+
+          try {
+            const res = await fetch('/api/jobs/' + jobId);
+            const data = await res.json();
+            ui.selectedJobId = data.job_id;
+
+            const status = data.status || '';
+
+            // Map API status -> log panel state machine.
+            // UI states: idle | loading | success | error
+            if (status === 'running') ui.setLogState('loading');
+            else if (status === 'stopping') ui.setLogState('stopping');
+            else if (status === 'stopped') ui.setLogState('stopped');
+            else if (status === 'done' || status === 'completed') ui.setLogState('success');
+            else if (status === 'error' || status === 'failed') ui.setLogState('error');
+            else ui.setLogState('idle');
+
+            ui.renderJobMeta(data, data.logs || []);
+            ui.appendLogs(data.logs || []);
+          } catch (e) {
+            ui.setLogState('error');
+            const panel = document.getElementById('job-log-panel');
+            if (panel) {
+              // Preserve stable container; just append one line describing the error.
+              const existing = panel.textContent || '';
+              const suffix = 'Failed to load logs.';
+              panel.textContent = existing ? (existing + '\\n' + suffix) : suffix;
+            }
+            ui.renderJobMeta(null, []);
+          }
+        },
+
+        renderJobMeta(job) {
+          const setText = (id, v) => { const el = document.getElementById(id); if (el) el.innerText = v ?? '—'; };
+          if (!job) {
+            setText('job-status', '—');
+            setText('job-exit', '—');
+            setText('job-started', '—');
+            setText('job-summary', '—');
+            const stopBtn = document.getElementById('job-stop-btn');
+            if (stopBtn) {
+              stopBtn.disabled = true;
+              stopBtn.innerText = 'Stop Job';
+            }
+            return;
+          }
+          const statusLabelMap = {
+            pending: 'Pending',
+            running: 'Running',
+            stopping: 'Stopping...',
+            stopped: 'Stopped',
+            completed: 'Completed',
+            failed: 'Failed',
+            done: 'Completed',
+            error: 'Failed',
+          };
+          setText('job-status', statusLabelMap[job.status] || (job.status ?? '—'));
+          setText('job-exit', job.exit_code === null || job.exit_code === undefined ? '—' : String(job.exit_code));
+          if (job.started_at) {
+            const d = new Date(job.started_at * 1000);
+            setText('job-started', d.toLocaleString());
+          } else {
+            setText('job-started', '—');
+          }
+
+          const res = job.result || {};
+          let durationS = res.duration_s;
+          if (durationS === null || durationS === undefined) {
+            if (job.started_at && job.finished_at) {
+              durationS = job.finished_at - job.started_at;
+            }
+          }
+
+          const stopBtn = document.getElementById('job-stop-btn');
+          if (stopBtn) {
+            const isRunningLike = job.status === 'running' || job.status === 'stopping';
+            stopBtn.disabled = !isRunningLike;
+            stopBtn.innerText = job.status === 'stopping' ? 'Stopping...' : 'Stop Job';
+          }
+
+          if (job.status === 'completed' || job.status === 'failed' || job.status === 'stopped') {
+            const parts = [];
+            if (typeof durationS === 'number') {
+              parts.push(`duration ${durationS.toFixed(1)}s`);
+            }
+            if (typeof res.fetched === 'number') parts.push(`fetched ${res.fetched}`);
+            if (typeof res.inserted === 'number') parts.push(`inserted ${res.inserted}`);
+            if (typeof res.skipped === 'number') parts.push(`skipped ${res.skipped}`);
+            if (typeof res.errors === 'number') parts.push(`errors ${res.errors}`);
+            setText('job-summary', parts.length ? parts.join(' • ') : '—');
+          } else {
+            setText('job-summary', '—');
+          }
+        },
+
+        async stopSelectedJob() {
+          const jobId = ui.currentJobId || ui.selectedJobId || document.getElementById('job-select')?.value;
+          if (!jobId) return;
+
+          const btn = document.getElementById('job-stop-btn');
+          if (btn) {
+            btn.disabled = true;
+            btn.innerText = 'Stopping...';
+          }
+
+          try {
+            await fetch('/api/jobs/' + jobId + '/stop', { method: 'POST' });
+          } catch (e) {
+            // Keep UI stable; polling will refresh status.
+          }
+          await ui.refreshSelectedJob();
+        },
+
+        // ---------- Log panel state machine ----------
+        setLogState(state) {
+          // Avoid unnecessary DOM churn (prevents flicker).
+          if (ui.logState === state) return;
+          ui.logState = state;
+
+          // Optionally show a muted idle message only when no logs exist yet.
+          // This avoids overwriting real logs or showing a loading placeholder.
+          const panel = document.getElementById('job-log-panel');
+
+          // Badge
+          const badge = document.getElementById('job-state-badge');
+          if (badge) {
+            badge.className = 'inline-flex items-center rounded-full border px-2 py-0.5 text-xs';
+
+            if (state === 'idle') {
+              badge.innerText = 'Idle';
+              badge.classList.add('border-slate-200', 'bg-slate-100', 'text-slate-700');
+            } else if (state === 'loading') {
+              badge.innerText = 'Running';
+              badge.classList.add('border-blue-200', 'bg-blue-50', 'text-blue-700');
+            } else if (state === 'stopping') {
+              badge.innerText = 'Stopping...';
+              badge.classList.add('border-amber-200', 'bg-amber-50', 'text-amber-700');
+            } else if (state === 'stopped') {
+              badge.innerText = 'Stopped';
+              badge.classList.add('border-slate-300', 'bg-slate-100', 'text-slate-700');
+            } else if (state === 'success') {
+              badge.innerText = 'Completed';
+              badge.classList.add('border-emerald-200', 'bg-emerald-50', 'text-emerald-700');
+            } else if (state === 'error') {
+              badge.innerText = 'Error';
+              badge.classList.add('border-red-200', 'bg-red-50', 'text-red-700');
+            }
+          }
+
+          if (state === 'idle' && panel && ui.logCursor === 0) {
+            const current = (panel.textContent || '').trim();
+            if (!current || current === '—') {
+              panel.textContent = 'No logs yet. Waiting for a job to start…';
+            }
+          }
+
+          // Spinner above logs
+          const spinner = document.getElementById('jobLogSpinner');
+          if (spinner) {
+            const isLoading = state === 'loading' || state === 'stopping';
+            spinner.classList.toggle('opacity-0', !isLoading);
+            spinner.classList.toggle('opacity-100', isLoading);
+          }
+        },
+
+        clearLogs() {
+          const panel = document.getElementById('job-log-panel');
+          if (!panel) return;
+          panel.textContent = '';
+          ui.logCursor = 0;
+          ui.logPanelEl = panel;
+        },
+
+        appendLogs(logs) {
+          const panel = ui.logPanelEl || document.getElementById('job-log-panel');
+          if (!panel) return;
+
+          const lines = logs || [];
+
+          // In-memory buffer can truncate older lines; if so, reset cursor.
+          if (lines.length < ui.logCursor) {
+            panel.textContent = '';
+            ui.logCursor = 0;
+          }
+
+          const newLines = lines.slice(ui.logCursor);
+          if (!newLines.length) return;
+
+          // Append without any "loading..." placeholder text.
+          const existing = panel.textContent || '';
+          const prefix = existing && !existing.endsWith('\n') ? '\n' : '';
+          panel.textContent = existing + prefix + newLines.join('\n');
+
+          ui.logCursor = lines.length;
+          panel.scrollTop = panel.scrollHeight;
+        },
+
+        // ---------- Search ----------
+        openSearchModal() {
+          document.getElementById('searchModal').classList.remove('hidden');
+          document.body.style.overflow = 'hidden';
+        },
+        closeSearchModal() {
+          document.getElementById('searchModal').classList.add('hidden');
+          document.body.style.overflow = '';
+        },
+
+        async doSearch() {
+          const query = document.getElementById('search-query').value.trim();
+          if (!query) return;
+
+          const btn = document.getElementById('searchBtn');
+          const spinner = btn ? btn : null;
+          const statusEl = document.getElementById('searchStatus');
+          const resultsEl = document.getElementById('results');
+
+          btn.disabled = true;
+          statusEl.innerText = 'Searching…';
+          resultsEl.innerHTML = '';
+
+          let payload = {
+            query: query,
+            limit: parseInt(document.getElementById('search-limit').value || '10', 10),
+          };
+
+          const minV = document.getElementById('search-min').value;
+          const maxV = document.getElementById('search-max').value;
+          const cpv = document.getElementById('search-cpv').value.trim();
+          const nuts = document.getElementById('search-nuts').value.trim();
+          const type = document.getElementById('search-type').value.trim();
+          const eu = document.getElementById('search-eu').value;
+
+          if (minV !== '') payload.min_value = parseFloat(minV);
+          if (maxV !== '') payload.max_value = parseFloat(maxV);
+          if (cpv) payload.cpv = cpv;
+          if (nuts) payload.nuts = nuts;
+          if (type) payload.contract_type = type;
+          if (eu === 'true') payload.eu_funded = true;
+          if (eu === 'false') payload.eu_funded = false;
+
+          try {
+            const res = await fetch('/api/search', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload),
+            });
+            const data = await res.json();
+            const results = data.results || [];
+
+            statusEl.innerText = `Done • ${results.length} results`;
+            ui.renderResults(results);
+          } catch (e) {
+            statusEl.innerText = 'Search failed.';
+            resultsEl.innerHTML = `<div class="text-sm text-slate-500">Unable to load results.</div>`;
+          } finally {
+            btn.disabled = false;
+          }
+        },
+
+        renderResults(results) {
+          const resultsEl = document.getElementById('results');
+          resultsEl.innerHTML = '';
+
+          if (!results.length) {
+            resultsEl.innerHTML = `<div class="text-sm text-slate-500">No results found.</div>`;
+            return;
+          }
+
+          for (const r of results) {
+            const value = r.estimated_value ? '€' + Number(r.estimated_value).toLocaleString(undefined, { maximumFractionDigits: 2 }) : '—';
+            const deadline = r.submission_deadline ? String(r.submission_deadline).replace('T', ' ') : '—';
+            const issuer = r.issuer || '—';
+            const sim = (typeof r.similarity_score === 'number') ? r.similarity_score.toFixed(3) : '—';
+
+            const card = document.createElement('div');
+            card.className = 'bg-white rounded-2xl border border-slate-200 shadow-sm p-5 hover:shadow transition';
+            card.innerHTML = `
+              <div class="flex items-start justify-between gap-3">
+                <div class="min-w-0">
+                  <div class="font-semibold text-slate-900 leading-snug">${escapeHtml(r.title || '')}</div>
+                  <div class="text-sm text-slate-500 mt-1">Issuer: ${escapeHtml(issuer)}</div>
+                </div>
+                <div class="text-right">
+                  <div class="text-xs text-slate-500">Similarity</div>
+                  <div class="font-semibold text-blue-700">${escapeHtml(sim)}</div>
+                </div>
+              </div>
+
+              <div class="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div class="rounded-xl bg-slate-50 border border-slate-200 p-3">
+                  <div class="text-xs text-slate-500">Value</div>
+                  <div class="text-sm font-semibold mt-1">${escapeHtml(value)}</div>
+                </div>
+                <div class="rounded-xl bg-slate-50 border border-slate-200 p-3 sm:col-span-2">
+                  <div class="text-xs text-slate-500">Deadline</div>
+                  <div class="text-sm font-semibold mt-1">${escapeHtml(deadline)}</div>
+                </div>
+              </div>
+
+              <div class="mt-4 text-sm text-slate-700">${escapeHtml(r.summary || '')}</div>
+
+              ${r.tender_url ? `
+                <div class="mt-4">
+                  <a class="text-sm font-medium text-blue-700 hover:text-blue-800 underline" href="${escapeHtml(r.tender_url)}" target="_blank" rel="noreferrer">
+                    Open tender
+                  </a>
+                </div>
+              ` : ``}
+            `;
+
+            resultsEl.appendChild(card);
+          }
+        },
+      };
+
+      function escapeHtml(str) {
+        return String(str)
+          .replaceAll('&', '&amp;')
+          .replaceAll('<', '&lt;')
+          .replaceAll('>', '&gt;')
+          .replaceAll('"', '&quot;')
+          .replaceAll("'", '&#039;');
+      }
+
+      // Wire events.
+      (function init() {
+        const today = new Date();
+        const endIso = today.toISOString().slice(0, 10);
+        const start = new Date(today);
+        start.setDate(start.getDate() - 30);
+        const startIso = start.toISOString().slice(0, 10);
+
+        const ingestStart = document.getElementById('ingest-start-date');
+        const ingestEnd = document.getElementById('ingest-end-date');
+        const orgStart = document.getElementById('org-start-date');
+        const orgEnd = document.getElementById('org-end-date');
+
+        if (ingestStart && !ingestStart.value) ingestStart.value = startIso;
+        if (ingestEnd && !ingestEnd.value) ingestEnd.value = endIso;
+        if (orgStart && !orgStart.value) orgStart.value = startIso;
+        if (orgEnd && !orgEnd.value) orgEnd.value = endIso;
+
+        const bindRangeValidation = (startId, endId, buttonId, errorId) => {
+          const startEl = document.getElementById(startId);
+          const endEl = document.getElementById(endId);
+          const run = () => ui.updateRangeUi({ startId, endId, buttonId, errorId });
+          if (startEl) startEl.addEventListener('change', run);
+          if (endEl) endEl.addEventListener('change', run);
+          run();
+        };
+        bindRangeValidation('ingest-start-date', 'ingest-end-date', 'ingest-run-btn', 'ingest-range-error');
+        bindRangeValidation('org-start-date', 'org-end-date', 'org-run-btn', 'org-range-error');
+
+        const select = document.getElementById('job-select');
+        if (select) {
+          select.onchange = () => ui.refreshSelectedJob();
+        }
+
+        // Default initial view.
+        ui.fetchStatus().catch(() => {});
+
+        // Initial jobs load.
+        ui.refreshJobs().then(() => ui.refreshSelectedJob()).catch(() => {});
+
+        // Poll job logs while user stays on job monitor area.
+        setInterval(() => {
+          const jobsEl = document.getElementById('jobs');
+          if (!jobsEl) return;
+          const rect = jobsEl.getBoundingClientRect();
+          const isVisible = rect.top < window.innerHeight * 0.8 && rect.bottom > 0;
+          if (!isVisible) return;
+
+          const statusText = (document.getElementById('job-status')?.innerText || '').toLowerCase();
+          if (statusText === 'completed' || statusText === 'failed' || statusText === 'stopped') return;
+
+          ui.refreshSelectedJob().catch(() => {});
+        }, 2500);
+      })();
+    </script>
+  </body>
+</html>
+

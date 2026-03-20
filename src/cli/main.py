@@ -1,5 +1,6 @@
 import click
 import logging
+from datetime import datetime
 from src.ingestion.pipeline import IngestionPipeline
 from src.organizations.extractor import OrganizationExtractor
 from src.search.hybrid import HybridSearch
@@ -14,30 +15,59 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
+def _validate_iso_date(value: str, field_name: str) -> str:
+    try:
+        datetime.fromisoformat(value)
+    except Exception as exc:
+        raise click.BadParameter(f"{field_name} must be YYYY-MM-DD (got {value!r})") from exc
+    return value
+
+
+def _validate_date_range(start_date: str, end_date: str) -> None:
+    start_dt = datetime.fromisoformat(start_date)
+    end_dt = datetime.fromisoformat(end_date)
+    if start_dt > end_dt:
+        raise click.BadParameter(
+            f"Invalid range: start-date {start_date} is after end-date {end_date}"
+        )
+
 @click.group()
 def cli():
     """Italian Tender Intelligence System CLI"""
     pass
 
 @cli.command()
-@click.option('--days', default=30, help='Number of days to look back')
-def ingest(days):
+@click.option('--start-date', required=True, help='Start date (YYYY-MM-DD)')
+@click.option('--end-date', required=True, help='End date (YYYY-MM-DD)')
+def ingest(start_date, end_date):
     """Run tender ingestion pipeline"""
-    click.echo(f"Starting ingestion for last {days} days...")
+    start_date = _validate_iso_date(start_date, "start-date")
+    end_date = _validate_iso_date(end_date, "end-date")
+    _validate_date_range(start_date, end_date)
+
+    click.echo(f"Starting ingestion from {start_date} to {end_date}...")
     pipeline = IngestionPipeline()
-    result = pipeline.run(days_back=days)
+    result = pipeline.run(start_date=start_date, end_date=end_date)
     click.echo(f"\n✓ Ingestion completed:")
+    click.echo(f"  - Range: {start_date} → {end_date}")
+    click.echo(f"  - Fetched: {result['fetched']}")
     click.echo(f"  - Ingested: {result['ingested']}")
     click.echo(f"  - Skipped: {result['skipped']}")
     click.echo(f"  - Errors: {result['errors']}")
 
 @cli.command()
-@click.option('--days', default=30, help='Number of days to look back')
-def extract_orgs(days):
+@click.option('--start-date', required=True, help='Start date (YYYY-MM-DD)')
+@click.option('--end-date', required=True, help='End date (YYYY-MM-DD)')
+def extract_orgs(start_date, end_date):
     """Extract organizations from tenders"""
+    start_date = _validate_iso_date(start_date, "start-date")
+    end_date = _validate_iso_date(end_date, "end-date")
+    _validate_date_range(start_date, end_date)
+
     click.echo("Extracting organizations from tender participants...")
     extractor = OrganizationExtractor()
-    result = extractor.extract_from_tenders(days_back=days)
+    result = extractor.extract_from_tenders(start_date=start_date, end_date=end_date)
     click.echo(f"\n✓ Organization extraction completed:")
     click.echo(f"  - New organizations: {result['new_organizations']}")
     click.echo(f"  - New participations: {result['new_participations']}")
@@ -122,7 +152,8 @@ def demo_search(org_id):
     searcher = HybridSearch()
     
     with get_db() as db:
-        org = db.query(Organization).get(org_id)
+        # SQLAlchemy 2.x: Session.get() avoids Query.get() deprecation warning.
+        org = db.get(Organization, org_id)
         if not org:
             click.echo(f"❌ Organization {org_id} not found")
             return
