@@ -35,10 +35,18 @@ class HybridSearch:
     
     def _format_result(self, tender: Tender, similarity: float) -> Dict:
         """Format search result"""
+        issuer_name = None
+        try:
+            if getattr(tender, "issuer", None) is not None:
+                issuer_name = tender.issuer.name
+        except Exception:
+            issuer_name = None
+
         return {
             "tender_id": tender.tender_id,
             "title": tender.title,
             "summary": tender.summary,
+            "issuer": issuer_name,
             "estimated_value": float(tender.estimated_value) if tender.estimated_value else None,
             "publication_date": tender.publication_date.isoformat() if tender.publication_date else None,
             "submission_deadline": tender.submission_deadline.isoformat() if tender.submission_deadline else None,

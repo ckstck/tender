@@ -2,22 +2,26 @@ import logging
 from src.database.connection import get_db
 from src.database.models import Organization, TenderParticipant, Tender
 from src.ingestion.client import ANACClient
+from src.config import Config
 
 logger = logging.getLogger(__name__)
 
 class OrganizationExtractor:
-    def extract_from_tenders(self, days_back: int = 30):
+    def extract_from_tenders(self, start_date: str, end_date: str):
         """Extract organizations from tender participants"""
-        logger.info("Starting organization extraction")
+        logger.info("Starting organization extraction from %s to %s", start_date, end_date)
         
         client = ANACClient()
-        raw_tenders = client.fetch_tenders(days_back)
         
         org_count = 0
         participation_count = 0
         
         with get_db() as db:
-            for tender_data in raw_tenders:
+            for tender_data in client.iter_tenders(
+                start_date=start_date,
+                end_date=end_date,
+                batch_size=Config.INGESTION_BATCH_SIZE,
+            ):
                 tender = db.query(Tender).filter_by(tender_id=tender_data['tender_id']).first()
                 if not tender:
                     logger.warning(f"Tender {tender_data['tender_id']} not found in database, skipping")

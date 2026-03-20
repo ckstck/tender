@@ -44,59 +44,89 @@ End-to-end MVP system for ingesting, enriching, and matching Italian public proc
 
 ## Quick Start
 
-### Prerequisites
-
+### Production-Ready Prerequisites
 - Python 3.9+
-- PostgreSQL 14+ with pgvector extension
-- OpenAI API key
+- PostgreSQL 14+ with the `pgvector` extension available (extension type is `vector`)
+- An OpenAI API key (optional but recommended for good summaries and search ranking)
 
-### Installation
-
+### 1) Create the environment
+From the `tender/` directory (this folder):
 ```bash
-# Clone repository
-cd /home/loki/projects/tender
-
-# Create virtual environment
-python -m venv venv
+python3 -m venv venv
 source venv/bin/activate
-
-# Install dependencies
 pip install -r requirements.txt
-
-# Configure environment
-cp .env.example .env
-# Edit .env with your credentials:
-#   - DATABASE_URL
-#   - OPENAI_API_KEY
 ```
 
-### Database Setup
+### 2) Configure environment (do not commit secrets)
+Create a file named `.env` in `tender/`:
+```bash
+# Database connection (recommended: local unix socket)
+DATABASE_URL=postgresql:///tender_db
+
+# Required for best search quality. If omitted, the system still runs but
+# summaries/embeddings fall back (search similarity will be lower quality).
+OPENAI_API_KEY=sk-your-key-here
+
+# Optional: ANAC API key (if your ANAC access needs it)
+ANAC_API_KEY=
+
+# Optional: logging
+LOG_LEVEL=INFO
+
+# Optional: document storage (only needed if you use the S3 download pipeline)
+S3_ENDPOINT=https://s3.amazonaws.com
+S3_ACCESS_KEY=
+S3_SECRET_KEY=
+S3_BUCKET=tender-documents
+```
+
+### 3) Database setup (idempotent)
+The `scripts/init_db.py` script:
+- enables the `vector` extension
+- creates all tables (safe to run multiple times)
 
 ```bash
-# Install PostgreSQL and pgvector (Ubuntu/Debian)
-sudo apt-get install postgresql-14 postgresql-14-pgvector
+# 1) Install PostgreSQL server + client + build tooling (Ubuntu/Debian)
+sudo apt-get update
+sudo apt-get install -y postgresql postgresql-contrib postgresql-server-dev-14
 
-# Create database
-sudo -u postgres createdb tender_db
+# 2) Install pgvector:
+#    Option A (if available as a package on your distro)
+sudo apt-get install -y postgresql-14-pgvector
 
-# Initialize schema
-python scripts/init_db.py
+#    Option B (always works): build from source
+#    git clone https://github.com/pgvector/pgvector.git
+#    cd pgvector && make && sudo make install
+
+# 3) Create database (run as postgres user; safe if it already exists)
+sudo -u postgres createdb tender_db 2>/dev/null || echo "Database already exists"
+
+# 4) Initialize schema (run inside venv; loads .env automatically)
+./venv/bin/python scripts/init_db.py
 ```
 
-### First Run
-
+### 4) First run
 ```bash
-# Ingest tenders (uses mock data if API unavailable)
-python -m src.cli.main ingest --days 30
+# Ingest tenders (uses mock data if ANAC API fetch fails)
+./venv/bin/python -m src.cli.main ingest --days 30
 
-# Extract organizations from participants
-python -m src.cli.main extract-orgs --days 30
+# Extract organizations from tender participants
+./venv/bin/python -m src.cli.main extract-orgs --days 30
 
-# Check status
-python -m src.cli.main status
+# Check database statistics
+./venv/bin/python -m src.cli.main status
+
+# Try a search
+./venv/bin/python -m src.cli.main search --query "road maintenance services" --limit 5
 ```
+
+### Re-running safely (important for production)
+- `ingest` is idempotent by `tender_id` (existing tenders are skipped).
+- If you change prompts/models or want to regenerate embeddings/summaries, you must explicitly reprocess data (this repo currently does not expose a “force re-embed” flag).
 
 ## Usage
+
+All commands assume your virtual environment is active (`source venv/bin/activate`). If you prefer, replace `python` with `./venv/bin/python`.
 
 ### CLI Commands
 
@@ -163,21 +193,51 @@ python -m src.cli.main download-docs \
 python -m src.cli.main status
 ```
 
+### Web UI (Modern Dashboard)
+This repo ships a lightweight web dashboard that wraps the existing CLI actions.
+
+1. Start the server:
+```bash
+./venv/bin/python -m src.web.server
+```
+
+2. Open in your browser:
+- http://localhost:8000
+
+3. Actions you can run from the UI:
+- `ingest`
+- `extract-orgs`
+- `demo-search`
+- `analyze-portals`
+- `download-docs`
+- quick `search` with filters
+- job monitor + logs
+
 ### Cron Setup
 
 For daily automated ingestion:
 
 ```bash
-# Make script executable
+# Ensure the cron script is executable
 chmod +x scripts/cron_ingestion.sh
-
-# Edit script to set correct path
-nano scripts/cron_ingestion.sh
 
 # Add to crontab (runs daily at 2 AM)
 crontab -e
-# Add line:
-0 2 * * * /home/loki/projects/tender/scripts/cron_ingestion.sh
+
+# Use an absolute path to the repo (script activates the venv and runs the CLI)
+0 2 * * * /full/path/to/tender/scripts/cron_ingestion.sh
+```
+
+#### Production logging
+- The CLI writes structured logs to stdout/stderr.
+- In cron, redirect output to a log file (example):
+  - `0 2 * * * /full/path/to/tender/scripts/cron_ingestion.sh >> /var/log/tender/cron.log 2>&1`
+
+#### Basic health check
+After each scheduled run:
+```bash
+./venv/bin/python -m src.cli.main status
+./venv/bin/python -m src.cli.main search --query "digital transformation consulting services" --limit 3
 ```
 
 ## Data Model
@@ -264,7 +324,7 @@ tender/
 ├── data/
 │   └── mock_tenders.json            # Mock OCDS data
 ├── requirements.txt
-├── .env.example
+├── .env                       # Local environment config (do not commit)
 └── README.md
 ```
 
@@ -305,7 +365,7 @@ sudo systemctl status postgresql
 psql -l | grep tender_db
 
 # Test connection
-psql postgresql://localhost/tender_db
+sudo -u postgres psql -d tender_db -c "SELECT 1;"
 ```
 
 ### pgvector extension not found

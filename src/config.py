@@ -15,6 +15,9 @@ class Config:
     
     LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
     INGESTION_DAYS_BACK = int(os.getenv('INGESTION_DAYS_BACK', '30'))
+    # How many records to request per page from ANAC endpoints.
+    # Also used as an ingestion batch size when streaming tenders.
+    INGESTION_BATCH_SIZE = int(os.getenv('INGESTION_BATCH_SIZE', '100'))
     
     OPENAI_MODEL = 'gpt-4o-mini'
     EMBEDDING_MODEL = 'text-embedding-3-small'
