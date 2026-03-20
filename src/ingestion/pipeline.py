@@ -2,8 +2,9 @@ import logging
 import time
 from datetime import datetime
 from typing import Callable, Dict, List, Optional
+from sqlalchemy import func
 from sqlalchemy.dialects.postgresql import insert
-from src.database.connection import get_db
+from src.database.connection import get_db, verify_database_connection
 from src.database.models import Tender, Issuer
 from src.ingestion.client import ANACClient
 from src.ingestion.enrichment import TenderEnrichment
@@ -32,6 +33,8 @@ class IngestionPipeline:
         start_ts = time.time()
         logger.info(f"Starting ingestion from {start_date} to {end_date}")
 
+        verify_database_connection()
+
         fetched_count = 0
         ingested_count = 0
         skipped_count = 0
@@ -44,6 +47,7 @@ class IngestionPipeline:
                 start_date=start_date,
                 end_date=end_date,
                 batch_size=Config.INGESTION_BATCH_SIZE,
+                max_tenders=Config.INGESTION_MAX_TENDERS,
                 should_stop=should_stop,
             ):
                 if should_stop and should_stop():
@@ -63,6 +67,10 @@ class IngestionPipeline:
                     # Ensure the SQLAlchemy session is usable for the next tender.
                     db.rollback()
                     continue
+
+            # Ensure portal analysis always has usable inputs even when OCDS is missing
+            # `tender.documents[].url` and/or platform IDs were not present in older rows.
+            self._backfill_missing_portals(db)
         
         duration_s = time.time() - start_ts
 
@@ -116,6 +124,44 @@ class IngestionPipeline:
             "errors": error_count,
             "duration_s": duration_s,
         }
+
+    def _backfill_missing_portals(self, db) -> None:
+        """
+        Local-only backfill for existing rows:
+        - If `source_platform` is NULL/empty -> set to 'ANAC'
+        - If `document_portal_url` is NULL/empty -> set to the platform base domain
+        """
+        from sqlalchemy import text
+
+        missing_doc_count = db.execute(
+            text("SELECT COUNT(*) FROM tenders WHERE document_portal_url IS NULL OR document_portal_url = ''")
+        ).fetchone()[0]
+
+        if missing_doc_count == 0:
+            return
+
+        # Default unknown platform to ANAC.
+        db.execute(
+            text("UPDATE tenders SET source_platform = 'ANAC' WHERE source_platform IS NULL OR source_platform = ''")
+        )
+
+        db.execute(
+            text(
+                """
+                UPDATE tenders
+                SET document_portal_url = CASE
+                    WHEN source_platform = 'MEPA' THEN 'https://acquistinretepa.it'
+                    ELSE 'https://pubblicitalegale.anticorruzione.it'
+                END
+                WHERE document_portal_url IS NULL OR document_portal_url = ''
+                """
+            )
+        )
+
+        logger.info(
+            "Backfilled missing document_portal_url rows: %s (tenders with NULL/empty doc urls)",
+            missing_doc_count,
+        )
     
     def _process_tender(self, db, tender_data: Dict) -> bool:
         """Process a single tender. Returns True if ingested, False if skipped."""
@@ -150,10 +196,11 @@ class IngestionPipeline:
         if deadline_raw:
             submission_deadline = self.client.parse_date_safe(deadline_raw)
 
-        stmt = insert(Tender).values(
+        insert_stmt = insert(Tender).values(
             tender_id=tender_data["tender_id"],
             title=tender_data["title"],
             issuer_id=issuer.id,
+            source_platform=tender_data.get("source_platform"),
             estimated_value=tender_data.get("estimated_value"),
             award_criteria=tender_data.get("award_criteria"),
             publication_date=publication_date,
@@ -172,8 +219,24 @@ class IngestionPipeline:
             searchable_text=searchable_text,
             embedding=embedding,
         )
-        stmt = stmt.on_conflict_do_nothing(index_elements=["tender_id"]).returning(Tender.id)
-        inserted_id = db.execute(stmt).scalar()
+        # Backfill `document_portal_url` on conflict: re-runs should enrich existing tenders
+        # when ANAC OCDS is missing `tender.documents`.
+        #
+        # We only update document_portal_url; other fields stay untouched on conflict.
+        insert_stmt = insert_stmt.on_conflict_do_update(
+            index_elements=["tender_id"],
+            set_={
+                "source_platform": func.coalesce(
+                    insert_stmt.excluded.source_platform,
+                    func.nullif(Tender.source_platform, ""),
+                ),
+                "document_portal_url": func.coalesce(
+                    insert_stmt.excluded.document_portal_url,
+                    func.nullif(Tender.document_portal_url, ""),
+                )
+            },
+        ).returning(Tender.id)
+        inserted_id = db.execute(insert_stmt).scalar()
         db.flush()
 
         if inserted_id is None:

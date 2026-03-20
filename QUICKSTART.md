@@ -15,7 +15,7 @@ psql --version
 ## Step 1: Environment Setup
 
 ```bash
-cd /home/loki/projects/tender
+cd /root/bluestar/tender
 
 # Create virtual environment
 python3 -m venv venv
@@ -35,7 +35,7 @@ sudo -u postgres createdb tender_db
 createdb tender_db
 
 # Initialize schema and pgvector
-python scripts/init_db.py
+./venv/bin/python scripts/init_db.py
 ```
 
 Expected output:
@@ -68,17 +68,17 @@ OPENAI_API_KEY=sk-your-key-here
 S3_ENDPOINT=https://s3.amazonaws.com
 S3_ACCESS_KEY=your-access-key
 S3_SECRET_KEY=your-secret-key
-S3_BUCKET=tender-documents
+S3_BUCKET=tenders
 ```
 
 ## Step 4: Run First Ingestion
 
 ```bash
 # Ingest tenders (uses mock data if API unavailable)
-python -m src.cli.main ingest --days 30
+python -m src.cli.main ingest --start-date 2025-08-01 --end-date 2025-08-30
 
 # Extract organizations
-python -m src.cli.main extract-orgs --days 30
+python -m src.cli.main extract-orgs --start-date 2025-08-01 --end-date 2025-08-30
 
 # Check status
 python -m src.cli.main status
@@ -118,11 +118,11 @@ python -m src.cli.main demo-search --org-id 1
 
 ```bash
 # Analyze portals
-python -m src.cli.main analyze-portals
+python -m src.cli.main analyze-portals --output portal_analysis.csv
 
-# Download documents from top portal
-python -m src.cli.main download-docs \
-  --portal portale-documenti.comune.milano.it \
+# Download documents from the top portal found in portal_analysis.csv
+python -m src.cli.main download-documents \
+  --portal-analysis-file portal_analysis.csv \
   --limit 5
 ```
 
@@ -131,7 +131,7 @@ python -m src.cli.main download-docs \
 ### "No module named 'src'"
 ```bash
 # Make sure you're in the project root
-cd /home/loki/projects/tender
+cd /root/bluestar/tender
 
 # Activate virtual environment
 source venv/bin/activate
@@ -173,7 +173,7 @@ grep OPENAI_API_KEY .env
    ```bash
    chmod +x scripts/cron_ingestion.sh
    crontab -e
-   # Add: 0 2 * * * /home/loki/projects/tender/scripts/cron_ingestion.sh
+   # Add: 0 2 * * * /root/bluestar/tender/scripts/cron_ingestion.sh
    ```
 
 2. **Explore the data:**
@@ -189,9 +189,10 @@ grep OPENAI_API_KEY .env
 ## Common Commands
 
 ```bash
-# Daily operations
-python -m src.cli.main ingest --days 1
-python -m src.cli.main extract-orgs --days 1
+# Daily operations (example: previous day, UTC)
+YESTERDAY="$(date -u -d 'yesterday' +%F)"
+python -m src.cli.main ingest --start-date "$YESTERDAY" --end-date "$YESTERDAY"
+python -m src.cli.main extract-orgs --start-date "$YESTERDAY" --end-date "$YESTERDAY"
 python -m src.cli.main status
 
 # Search examples

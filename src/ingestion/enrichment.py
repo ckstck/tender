@@ -2,6 +2,8 @@ import openai
 from typing import List
 import logging
 from src.config import Config
+import hashlib
+import random
 
 logger = logging.getLogger(__name__)
 
@@ -33,8 +35,12 @@ Summary (max 240 chars):"""
             response = openai.chat.completions.create(
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
-                max_tokens=100,
-                temperature=0.3
+                temperature=0.3,
+                # The OpenAI Python SDK version in this repo only exposes
+                # `max_tokens`, but newer model families may require
+                # `max_completion_tokens`. Passing it via `extra_body`
+                # avoids SDK signature mismatch.
+                extra_body={"max_completion_tokens": 100},
             )
             
             summary = response.choices[0].message.content.strip()
@@ -70,8 +76,16 @@ Summary (max 240 chars):"""
     def generate_embedding(self, text: str) -> List[float]:
         """Generate embedding vector using OpenAI"""
         if not Config.OPENAI_API_KEY:
-            logger.warning("No OpenAI API key, returning zero vector")
-            return [0.0] * Config.EMBEDDING_DIMENSIONS
+            # Deterministic fallback for demo/reproducibility:
+            # - avoids `nan` similarity results caused by zero vectors
+            # - keeps output stable across machines/runs
+            logger.warning(
+                "No OpenAI API key, using deterministic pseudo-embedding fallback"
+            )
+            normalized = text if isinstance(text, str) else str(text)
+            seed = int(hashlib.sha256(normalized.encode("utf-8")).hexdigest(), 16) % (2**32)
+            rng = random.Random(seed)
+            return [rng.uniform(-0.05, 0.05) for _ in range(Config.EMBEDDING_DIMENSIONS)]
         
         try:
             response = openai.embeddings.create(

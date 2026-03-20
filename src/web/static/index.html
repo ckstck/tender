@@ -23,17 +23,6 @@
 
         <nav class="px-3 pb-6 space-y-2">
           <button
-            id="nav-status"
-            data-nav="status"
-            class="nav w-full flex items-center gap-3 rounded-xl px-3 py-2 text-sm bg-white/0 border border-transparent hover:bg-white/10 transition"
-            onclick="ui.go('status')"
-          >
-            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M3 12h2.5l2-5 3.5 10 2-5H21" />
-            </svg>
-            Status
-          </button>
-          <button
             id="nav-actions"
             data-nav="actions"
             class="nav w-full flex items-center gap-3 rounded-xl px-3 py-2 text-sm bg-white/0 border border-transparent hover:bg-white/10 transition"
@@ -51,6 +40,32 @@
               <circle cx="12" cy="12" r="3" />
             </svg>
             Actions
+          </button>     
+          <button
+            id="nav-tenders"
+            data-nav="tenders"
+            class="nav w-full flex items-center gap-3 rounded-xl px-3 py-2 text-sm bg-white/0 border border-transparent hover:bg-white/10 transition"
+            onclick="ui.go('tenders')"
+          >
+            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M4 4h16v6H4z" />
+              <path d="M4 14h16v6H4z" />
+            </svg>
+            Tenders
+          </button>
+          <button
+            id="nav-organizations"
+            data-nav="organizations"
+            class="nav w-full flex items-center gap-3 rounded-xl px-3 py-2 text-sm bg-white/0 border border-transparent hover:bg-white/10 transition"
+            onclick="ui.go('organizations')"
+          >
+            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+              <circle cx="9" cy="7" r="4" />
+              <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+            </svg>
+            Organizations
           </button>
           <button
             id="nav-search"
@@ -251,94 +266,265 @@
               </div>
             </section>
 
-            <!-- Job Monitor -->
-            <section id="jobs" class="space-y-4 mt-10">
+            <!-- Job Monitor + Scheduled Jobs -->
+            <section id="jobs" class="space-y-4 mt-10 hidden">
+              <!-- Scheduled Jobs (production-safe configuration) -->
+              <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 md:p-6">
+                <div class="flex items-start justify-between gap-4">
+                  <div>
+                    <h2 class="text-lg font-semibold text-slate-900">Scheduled Jobs</h2>
+                    <p class="text-sm text-slate-500 mt-1">Configure and control scheduled jobs.</p>
+                  </div>
+                  <div class="flex items-center gap-3">
+                    <div
+                      id="scheduledSpinner"
+                      class="opacity-0 h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-slate-300 border-t-emerald-500"
+                      aria-hidden="true"
+                    ></div>
+                    <button
+                      id="scheduledRefreshBtn"
+                      type="button"
+                      class="px-3 py-2 rounded-lg text-sm font-medium border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition"
+                      onclick="ui.fetchScheduledJobs().catch(() => {})"
+                    >
+                      Refresh
+                    </button>
+                  </div>
+                </div>
+
+                <div class="mt-5 space-y-4" id="scheduledJobsList">
+                  <div class="text-sm text-slate-500">Loading scheduled jobs…</div>
+                </div>
+              </div>
+
               <div class="flex items-end justify-between gap-4">
                 <div>
                   <h2 class="text-lg font-semibold text-slate-900">Job Monitor</h2>
-                  <p class="text-sm text-slate-500 mt-1">Background logs (live)</p>
+                  <p class="text-sm text-slate-500 mt-1">Background jobs and live logs</p>
                 </div>
                 <div class="flex items-center gap-2">
-                  <button class="px-3 py-2 rounded-xl text-sm border border-slate-200 bg-white hover:bg-slate-50 transition" onclick="ui.refreshJobs()">
+                  <button type="button" class="px-3 py-2 rounded-lg text-sm font-medium border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition" onclick="ui.refreshJobs()">
                     Refresh jobs
                   </button>
                 </div>
               </div>
 
-              <div class="bg-white rounded-2xl shadow-md border border-slate-300 p-5">
-                <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
-                  <div class="lg:col-span-4">
-                    <div class="text-sm font-semibold">Active job</div>
-                    <div class="text-sm text-slate-500 mt-1">Choose a job to see logs.</div>
+              <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 md:p-6">
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start">
+                  <!-- Left: job picker + meta -->
+                  <div class="lg:col-span-4 space-y-5">
+                    <div>
+                      <h3 class="text-sm font-semibold text-slate-900">Active job</h3>
+                      <p class="text-xs text-slate-500 mt-0.5">Select a job to view details and logs.</p>
+                    </div>
 
-                    <div class="mt-4">
-                      <label class="text-sm text-slate-700">Job</label>
-                      <select id="job-select" class="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 outline-none focus:ring-2 focus:ring-blue-200">
+                    <div>
+                      <label for="job-select" class="text-xs font-medium text-slate-600 uppercase tracking-wide">Job</label>
+                      <select id="job-select" class="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300">
                         <option value="">Loading…</option>
                       </select>
                     </div>
 
-                    <div class="mt-4 grid grid-cols-4 gap-3">
-                      <div class="rounded-xl bg-slate-50 border border-slate-200 p-3">
-                        <div class="flex items-center justify-between gap-3">
-                          <div class="text-xs text-slate-500">Status</div>
+                    <!-- 4-column job info (aligned SaaS-style grid) -->
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-1">
+                      <div class="min-w-0">
+                        <p class="text-xs font-medium text-slate-500">Status</p>
+                        <div class="mt-1.5">
                           <span
                             id="job-state-badge"
-                            class="inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-xs text-slate-700"
+                            class="inline-flex items-center px-2 py-1 text-xs font-medium rounded-full bg-slate-100 text-slate-700"
+                            role="status"
+                            aria-live="polite"
                           >
                             Idle
                           </span>
                         </div>
-                        <div id="job-status" class="text-sm font-semibold mt-1">—</div>
                       </div>
-                      <div class="rounded-xl bg-slate-50 border border-slate-200 p-3">
-                        <div class="text-xs text-slate-500">Exit</div>
-                        <div id="job-exit" class="text-sm font-semibold mt-1">—</div>
+                      <div class="min-w-0">
+                        <p class="text-xs font-medium text-slate-500">Exit</p>
+                        <p id="job-exit" class="text-sm font-medium text-slate-900 mt-1.5 tabular-nums">—</p>
                       </div>
-                      <div class="rounded-xl bg-slate-50 border border-slate-200 p-3">
-                        <div class="text-xs text-slate-500">Started</div>
-                        <div id="job-started" class="text-sm font-semibold mt-1">—</div>
+                      <div class="min-w-0">
+                        <p class="text-xs font-medium text-slate-500">Started</p>
+                        <p id="job-started" class="text-sm text-slate-900 mt-1.5 leading-snug break-words">—</p>
                       </div>
-                      <div class="rounded-xl bg-slate-50 border border-slate-200 p-3">
-                        <div class="text-xs text-slate-500">Duration & Stats</div>
-                        <div id="job-summary" class="text-sm font-semibold mt-1">—</div>
+                      <div class="min-w-0">
+                        <p class="text-xs font-medium text-slate-500">Duration</p>
+                        <p id="job-duration" class="text-sm font-medium text-slate-900 mt-1.5 tabular-nums">—</p>
                       </div>
                     </div>
 
-                    <div class="mt-4">
-                      <button id="job-reload" class="w-full px-4 py-2 rounded-xl bg-white border border-slate-300 hover:bg-slate-50 transition text-sm font-medium" onclick="ui.refreshSelectedJob()">
+                    <p id="job-stats" class="text-xs text-slate-500 leading-relaxed min-h-[1.25rem]"></p>
+
+                    <div class="flex flex-col sm:flex-row gap-3 pt-1">
+                      <button type="button" id="job-reload" class="flex-1 px-4 py-2 rounded-lg text-sm font-medium bg-slate-100 text-slate-800 hover:bg-slate-200 transition" onclick="ui.refreshSelectedJob()">
                         Reload logs
                       </button>
-                    </div>
-                    <div class="mt-2">
-                      <button id="job-stop-btn" class="w-full px-4 py-2 rounded-xl bg-white border border-red-300 text-red-700 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed transition text-sm font-medium" onclick="ui.stopSelectedJob()">
+                      <button type="button" id="job-stop-btn" class="flex-1 px-4 py-2 rounded-lg text-sm font-medium bg-red-50 text-red-700 hover:bg-red-100 disabled:opacity-50 disabled:cursor-not-allowed transition" onclick="ui.stopSelectedJob()">
                         Stop Job
                       </button>
                     </div>
                   </div>
 
-                  <div class="lg:col-span-8">
-                    <div class="flex items-center justify-between">
-                      <div class="text-sm font-semibold">Log Panel</div>
-                      <div class="text-xs text-slate-500">Monospace • scrollable</div>
-                    </div>
-
-                    <!-- Spinner row above logs (stable layout, no layout shifting). -->
-                    <div class="h-6 mt-2 flex items-center justify-end">
-                      <div
-                        id="jobLogSpinner"
-                        class="opacity-0 h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-blue-600"
-                        aria-hidden="true"
-                      ></div>
+                  <!-- Right: log panel -->
+                  <div class="lg:col-span-8 min-w-0">
+                    <div class="flex items-center justify-between gap-3">
+                      <h3 class="text-sm font-semibold text-slate-900">Logs</h3>
+                      <div class="flex items-center gap-2">
+                        <span class="text-xs text-slate-500 hidden sm:inline">Monospace</span>
+                        <div
+                          id="jobLogSpinner"
+                          class="opacity-0 h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-slate-300 border-t-emerald-500"
+                          aria-hidden="true"
+                        ></div>
+                      </div>
                     </div>
 
                     <div
-                      class="mt-2 rounded-2xl bg-slate-950 text-slate-100 border border-slate-800 p-4 max-h-96 min-h-48 overflow-y-auto font-mono text-xs"
+                      class="mt-3 rounded-lg bg-black text-emerald-400 font-mono text-xs p-3 sm:p-4 max-h-[min(28rem,55vh)] min-h-[12rem] overflow-y-auto shadow-inner [scrollbar-width:thin]"
                       id="job-log-panel"
                       style="white-space: pre-wrap;"
                     >
                       —
                     </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <!-- Tenders Browser -->
+            <section id="tenders" class="space-y-4 mt-10 hidden">
+              <div class="flex items-end justify-between gap-4">
+                <div>
+                  <h2 class="text-lg font-semibold text-slate-900">Tenders</h2>
+                  <p class="text-sm text-slate-500 mt-1">Stored tenders from the local database.</p>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button
+                    type="button"
+                    id="tenders-prev"
+                    class="px-3 py-2 rounded-lg text-sm font-medium border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition"
+                    onclick="ui.changeTendersPage(-1)"
+                  >
+                    Prev
+                  </button>
+                  <div id="tenders-page-info" class="text-xs text-slate-500 min-w-[120px] text-center"></div>
+                  <button
+                    type="button"
+                    id="tenders-next"
+                    class="px-3 py-2 rounded-lg text-sm font-medium border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition"
+                    onclick="ui.changeTendersPage(1)"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+
+              <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 md:p-6">
+                <div class="flex items-center justify-between gap-4 mb-4">
+                  <div class="text-sm font-semibold text-slate-900">Results</div>
+                  <div id="tenders-loading" class="text-xs text-slate-500 hidden">Loading…</div>
+                </div>
+
+                <div class="overflow-x-auto">
+                  <table class="min-w-full text-sm">
+                    <thead class="sticky top-0 bg-slate-50 border-b border-slate-200">
+                      <tr class="text-left">
+                        <th class="px-3 py-2 font-semibold text-slate-700">Title</th>
+                        <th class="px-3 py-2 font-semibold text-slate-700">Estimated Value</th>
+                        <th class="px-3 py-2 font-semibold text-slate-700">Publication Date</th>
+                        <th class="px-3 py-2 font-semibold text-slate-700">Contract Type</th>
+                      </tr>
+                    </thead>
+                    <tbody id="tenders-tbody">
+                      <tr>
+                        <td colspan="4" class="px-3 py-3 text-center text-slate-500">—</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </section>
+
+            <!-- Organizations Browser -->
+            <section id="organizations" class="space-y-4 mt-10 hidden">
+              <div class="flex items-end justify-between gap-4">
+                <div>
+                  <h2 class="text-lg font-semibold text-slate-900">Organizations</h2>
+                  <p class="text-sm text-slate-500 mt-1">Organizations + participation counts (JOIN with local tenders).</p>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button
+                    type="button"
+                    id="orgs-prev"
+                    class="px-3 py-2 rounded-lg text-sm font-medium border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition"
+                    onclick="ui.changeOrganizationsPage(-1)"
+                  >
+                    Prev
+                  </button>
+                  <div id="orgs-page-info" class="text-xs text-slate-500 min-w-[120px] text-center"></div>
+                  <button
+                    type="button"
+                    id="orgs-next"
+                    class="px-3 py-2 rounded-lg text-sm font-medium border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition"
+                    onclick="ui.changeOrganizationsPage(1)"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+                <div class="lg:col-span-5 bg-white rounded-xl shadow-sm border border-slate-200 p-5 md:p-6 overflow-hidden">
+                  <div class="flex items-center justify-between gap-4 mb-4">
+                    <div class="text-sm font-semibold text-slate-900">Organizations</div>
+                    <div id="orgs-loading" class="text-xs text-slate-500 hidden">Loading…</div>
+                  </div>
+
+                  <div class="overflow-x-auto">
+                    <table class="min-w-full text-sm">
+                      <thead class="sticky top-0 bg-slate-50 border-b border-slate-200">
+                        <tr class="text-left">
+                          <th class="px-3 py-2 font-semibold text-slate-700">Name</th>
+                          <th class="px-3 py-2 font-semibold text-slate-700">Tax ID</th>
+                          <th class="px-3 py-2 font-semibold text-slate-700">Participations</th>
+                        </tr>
+                      </thead>
+                      <tbody id="orgs-tbody">
+                        <tr>
+                          <td colspan="3" class="px-3 py-3 text-center text-slate-500">—</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div class="lg:col-span-7 bg-white rounded-xl shadow-sm border border-slate-200 p-5 md:p-6 overflow-hidden">
+                  <div class="flex items-center justify-between gap-4 mb-4">
+                    <div class="text-sm font-semibold text-slate-900">Organization details</div>
+                    <div id="org-details-loading" class="text-xs text-slate-500 hidden">Loading…</div>
+                  </div>
+
+                  <div id="org-details-meta" class="text-sm text-slate-700 mb-4">
+                    Select an organization from the table.
+                  </div>
+
+                  <div class="overflow-x-auto">
+                    <table class="min-w-full text-sm">
+                      <thead class="sticky top-0 bg-slate-50 border-b border-slate-200">
+                        <tr class="text-left">
+                          <th class="px-3 py-2 font-semibold text-slate-700">Tender Title</th>
+                          <th class="px-3 py-2 font-semibold text-slate-700">Estimated Value</th>
+                          <th class="px-3 py-2 font-semibold text-slate-700">Publication Date</th>
+                          <th class="px-3 py-2 font-semibold text-slate-700">Contract Type</th>
+                        </tr>
+                      </thead>
+                      <tbody id="org-related-tenders-tbody">
+                        <tr>
+                          <td colspan="4" class="px-3 py-3 text-center text-slate-500">—</td>
+                        </tr>
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               </div>
@@ -350,9 +536,9 @@
 
     <!-- Search Modal -->
     <div id="searchModal" class="fixed inset-0 z-50 hidden">
-      <div class="absolute inset-0 bg-black/50" onclick="ui.closeSearchModal()"></div>
-      <div class="relative mx-auto mt-10 max-w-5xl">
-        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+      <div class="absolute inset-0 bg-black/50 z-10" onclick="if (event.target === this) ui.closeSearchModal()"></div>
+      <div class="relative z-20 mx-auto mt-10 max-w-5xl">
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden max-h-[90vh] flex flex-col">
           <div class="flex items-start justify-between gap-4 p-5 border-b border-slate-200">
             <div>
               <div class="text-lg font-semibold">Search Tenders</div>
@@ -361,7 +547,7 @@
             <button class="px-3 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 transition" onclick="ui.closeSearchModal()">Close</button>
           </div>
 
-          <div class="p-5">
+          <div class="p-5 flex flex-col min-h-0">
             <div class="flex flex-col lg:flex-row lg:items-end gap-3">
               <div class="flex-1">
                 <label class="text-sm text-slate-700">Query</label>
@@ -376,12 +562,12 @@
                 <label class="text-sm text-slate-700">Limit</label>
                 <input id="search-limit" type="number" min="1" value="10" class="mt-2 w-full rounded-xl border border-slate-200 px-3 py-3 outline-none focus:ring-2 focus:ring-blue-200" />
               </div>
-              <button id="searchBtn" class="lg:w-44 px-4 py-3 rounded-xl bg-blue-600 text-white hover:bg-blue-700 transition text-sm font-medium" onclick="ui.doSearch()">
+              <button id="searchBtn" type="button" class="lg:w-44 px-4 py-3 rounded-xl bg-blue-600 text-white hover:bg-blue-700 transition text-sm font-medium">
                 Search
               </button>
             </div>
 
-            <div class="mt-5 grid grid-cols-1 md:grid-cols-12 gap-5">
+            <div class="mt-5 grid grid-cols-1 md:grid-cols-12 gap-5 flex-1 min-h-0 overflow-hidden">
               <div class="md:col-span-4">
                 <div class="rounded-2xl bg-slate-50 border border-slate-200 p-4">
                   <div class="text-sm font-semibold">Filters</div>
@@ -420,12 +606,12 @@
                 </div>
               </div>
 
-              <div class="md:col-span-8">
+              <div class="md:col-span-8 flex flex-col min-h-0">
                 <div class="flex items-center justify-between">
                   <div class="text-sm font-semibold">Results</div>
                   <div id="searchStatus" class="text-xs text-slate-500"></div>
                 </div>
-                <div id="results" class="mt-3 grid grid-cols-1 gap-3">
+                <div id="results" class="mt-3 grid grid-cols-1 gap-3 flex-1 min-h-0 overflow-y-auto pr-2">
                   <!-- cards -->
                 </div>
               </div>
@@ -438,15 +624,31 @@
     <script>
       const ui = {
         active: 'status',
+        currentView: 'status',
         selectedJobId: null,
         currentJobId: null,
         logState: 'idle', // idle | loading | stopping | stopped | success | error
         logCursor: 0, // number of log lines already rendered
         logPanelEl: null,
+        _statsRefreshedJobId: null,
+
+        // ---------- List state ----------
+        tendersLimit: 20,
+        tendersOffset: 0,
+        tendersTotal: 0,
+        orgsLimit: 20,
+        orgsOffset: 0,
+        orgsTotal: 0,
+        selectedOrgId: null,
+        jobPollInFlight: false,
+
+        // ---------- Scheduled Jobs state ----------
+        scheduledJobsPollInFlight: false,
 
         // ---------- Navigation ----------
         go(section) {
           ui.active = section;
+          ui.currentView = section;
           // Update sidebar active styles.
           const navButtons = document.querySelectorAll('.nav');
           for (const b of navButtons) {
@@ -456,14 +658,31 @@
             b.classList.toggle('border-white/15', match);
           }
 
-          if (section === 'status') {
-            window.scrollTo({ top: 0, behavior: 'smooth' });
+          // Client-side view switch: show one page section, hide the rest.
+          const viewVisibility = {
+            status: { actions: true, secondary: true, jobs: false, tenders: false, organizations: false },
+            actions: { actions: true, secondary: true, jobs: false, tenders: false, organizations: false },
+            jobs: { actions: false, secondary: false, jobs: true, tenders: false, organizations: false },
+            tenders: { actions: false, secondary: false, jobs: false, tenders: true, organizations: false },
+            organizations: { actions: false, secondary: false, jobs: false, tenders: false, organizations: true },
+          };
+          const vis = viewVisibility[section] || viewVisibility.status;
+          for (const [id, shouldShow] of Object.entries(vis)) {
+            const el = document.getElementById(id);
+            if (!el) continue;
+            el.classList.toggle('hidden', !shouldShow);
           }
-          if (section === 'actions') {
-            document.getElementById('actions')?.scrollIntoView({ behavior: 'smooth' });
-          }
+
+          if (section === 'status' || section === 'actions') window.scrollTo({ top: 0, behavior: 'smooth' });
+          if (section === 'jobs') document.getElementById('jobs')?.scrollIntoView({ behavior: 'smooth' });
+          if (section === 'tenders') document.getElementById('tenders')?.scrollIntoView({ behavior: 'smooth' });
+          if (section === 'organizations') document.getElementById('organizations')?.scrollIntoView({ behavior: 'smooth' });
+
+          if (section === 'tenders') ui.fetchTenders().catch(() => {});
+          if (section === 'organizations') ui.fetchOrganizations().catch(() => {});
           if (section === 'jobs') {
-            document.getElementById('jobs')?.scrollIntoView({ behavior: 'smooth' });
+            ui.refreshJobs().then(() => ui.refreshSelectedJob()).catch(() => {});
+            ui.fetchScheduledJobs().catch(() => {});
           }
         },
 
@@ -485,13 +704,203 @@
             set('st-orgs', data.organizations ?? 0);
             set('st-issuers', data.issuers ?? 0);
             set('st-docs', data.documents ?? 0);
-            set('st-search', data.search_queries ?? 0);
+            set('st-search', data.search_queries_count ?? data.search_queries ?? 0);
           } catch (e) {
             set('st-tenders', '—');
             set('st-orgs', '—');
             set('st-issuers', '—');
             set('st-docs', '—');
             set('st-search', '—');
+          }
+        },
+
+        // ---------- Tenders ----------
+        async fetchTenders() {
+          const tbody = document.getElementById('tenders-tbody');
+          const loading = document.getElementById('tenders-loading');
+          const pageInfo = document.getElementById('tenders-page-info');
+          const prevBtn = document.getElementById('tenders-prev');
+          const nextBtn = document.getElementById('tenders-next');
+          if (!tbody || !pageInfo || !prevBtn || !nextBtn) return;
+
+          tbody.innerHTML = `<tr><td colspan="4" class="px-3 py-3 text-center text-slate-500">Loading…</td></tr>`;
+          if (loading) loading.classList.remove('hidden');
+
+          ui.tendersOffset = Math.max(0, ui.tendersOffset || 0);
+
+          try {
+            const limit = ui.tendersLimit;
+            const offset = ui.tendersOffset;
+            const res = await fetch(`/api/tenders?limit=${limit}&offset=${offset}`);
+            const data = await res.json();
+
+            const items = data.items || [];
+            ui.tendersTotal = data.total || 0;
+
+            const start = ui.tendersTotal ? offset + 1 : 0;
+            const end = ui.tendersTotal ? Math.min(offset + limit, ui.tendersTotal) : 0;
+            pageInfo.innerText = ui.tendersTotal ? `${start}-${end} of ${ui.tendersTotal}` : '0';
+
+            prevBtn.disabled = offset <= 0;
+            nextBtn.disabled = offset + limit >= ui.tendersTotal;
+            prevBtn.classList.toggle('opacity-50', prevBtn.disabled);
+            nextBtn.classList.toggle('opacity-50', nextBtn.disabled);
+
+            if (!items.length) {
+              tbody.innerHTML = `<tr><td colspan="4" class="px-3 py-3 text-center text-slate-500">No tenders found</td></tr>`;
+              return;
+            }
+
+            tbody.innerHTML = '';
+            for (const t of items) {
+              const tr = document.createElement('tr');
+              tr.className = 'border-b border-slate-200 hover:bg-slate-50';
+              tr.innerHTML = `
+                <td class="px-3 py-2 text-slate-900 font-medium break-words max-w-[30rem]">${t.title ?? ''}</td>
+                <td class="px-3 py-2 text-slate-700 tabular-nums">${t.estimated_value ?? ''}</td>
+                <td class="px-3 py-2 text-slate-700">${t.publication_date ?? ''}</td>
+                <td class="px-3 py-2 text-slate-700">${t.contract_type ?? ''}</td>
+              `;
+              tbody.appendChild(tr);
+            }
+          } catch (e) {
+            tbody.innerHTML = `<tr><td colspan="4" class="px-3 py-3 text-center text-red-600">Failed to load tenders</td></tr>`;
+          } finally {
+            if (loading) loading.classList.add('hidden');
+          }
+        },
+
+        changeTendersPage(dir) {
+          const next = ui.tendersOffset + dir * ui.tendersLimit;
+          ui.tendersOffset = Math.max(0, next);
+          ui.fetchTenders().catch(() => {});
+        },
+
+        // ---------- Organizations ----------
+        async fetchOrganizations() {
+          const tbody = document.getElementById('orgs-tbody');
+          const loading = document.getElementById('orgs-loading');
+          const pageInfo = document.getElementById('orgs-page-info');
+          const prevBtn = document.getElementById('orgs-prev');
+          const nextBtn = document.getElementById('orgs-next');
+          if (!tbody || !pageInfo || !prevBtn || !nextBtn) return;
+
+          tbody.innerHTML = `<tr><td colspan="3" class="px-3 py-3 text-center text-slate-500">Loading…</td></tr>`;
+          if (loading) loading.classList.remove('hidden');
+
+          ui.orgsOffset = Math.max(0, ui.orgsOffset || 0);
+
+          try {
+            const limit = ui.orgsLimit;
+            const offset = ui.orgsOffset;
+            const res = await fetch(`/api/organizations?limit=${limit}&offset=${offset}`);
+            const data = await res.json();
+
+            const items = data.items || [];
+            ui.orgsTotal = data.total || 0;
+
+            const start = ui.orgsTotal ? offset + 1 : 0;
+            const end = ui.orgsTotal ? Math.min(offset + limit, ui.orgsTotal) : 0;
+            pageInfo.innerText = ui.orgsTotal ? `${start}-${end} of ${ui.orgsTotal}` : '0';
+
+            prevBtn.disabled = offset <= 0;
+            nextBtn.disabled = offset + limit >= ui.orgsTotal;
+            prevBtn.classList.toggle('opacity-50', prevBtn.disabled);
+            nextBtn.classList.toggle('opacity-50', nextBtn.disabled);
+
+            if (!items.length) {
+              tbody.innerHTML = `<tr><td colspan="3" class="px-3 py-3 text-center text-slate-500">No organizations found</td></tr>`;
+              return;
+            }
+
+            tbody.innerHTML = '';
+            for (const o of items) {
+              const tr = document.createElement('tr');
+              tr.className = 'border-b border-slate-200 hover:bg-slate-50 cursor-pointer';
+              tr.dataset.orgId = String(o.id);
+              tr.onclick = () => ui.selectOrganization(o.id);
+              tr.innerHTML = `
+                <td class="px-3 py-2 text-slate-900 font-medium break-words max-w-[18rem]">${o.name ?? ''}</td>
+                <td class="px-3 py-2 text-slate-700 tabular-nums">${o.tax_id ?? ''}</td>
+                <td class="px-3 py-2 text-slate-700 tabular-nums">${o.participation_count ?? 0}</td>
+              `;
+              if (ui.selectedOrgId && o.id === ui.selectedOrgId) {
+                tr.classList.add('bg-slate-100');
+              }
+              tbody.appendChild(tr);
+            }
+
+            // Auto-select the first visible org when switching pages.
+            if (!ui.selectedOrgId) ui.selectOrganization(items[0].id);
+          } catch (e) {
+            tbody.innerHTML = `<tr><td colspan="3" class="px-3 py-3 text-center text-red-600">Failed to load organizations</td></tr>`;
+          } finally {
+            if (loading) loading.classList.add('hidden');
+          }
+        },
+
+        changeOrganizationsPage(dir) {
+          const next = ui.orgsOffset + dir * ui.orgsLimit;
+          ui.orgsOffset = Math.max(0, next);
+          ui.selectedOrgId = null;
+          ui.fetchOrganizations().catch(() => {});
+        },
+
+        async selectOrganization(orgId) {
+          ui.selectedOrgId = orgId;
+          const detailsMeta = document.getElementById('org-details-meta');
+          const loading = document.getElementById('org-details-loading');
+          const tenderTbody = document.getElementById('org-related-tenders-tbody');
+          if (!detailsMeta || !tenderTbody) return;
+
+          // Highlight selected organization row.
+          const rows = document.querySelectorAll('#orgs-tbody tr');
+          for (const r of rows) {
+            const isSelected = String(r.dataset.orgId || '') === String(orgId);
+            r.classList.toggle('bg-slate-100', isSelected);
+          }
+
+          if (loading) loading.classList.remove('hidden');
+          detailsMeta.innerHTML = `Loading details for organization #${orgId}…`;
+          tenderTbody.innerHTML = `<tr><td colspan="4" class="px-3 py-3 text-center text-slate-500">Loading…</td></tr>`;
+
+          try {
+            const res = await fetch(`/api/organizations/${orgId}?limit=20&offset=0`);
+            const data = await res.json();
+
+            const name = data.name ?? '';
+            const taxId = data.tax_id ?? '';
+            const pc = data.participation_count ?? 0;
+
+            detailsMeta.innerHTML = `
+              <div class="text-sm font-semibold">${name}</div>
+              <div class="text-xs text-slate-500 mt-1">Tax ID: <span class="tabular-nums">${taxId}</span></div>
+              <div class="text-xs text-slate-500 mt-1">Participation count: <span class="tabular-nums">${pc}</span></div>
+            `;
+
+            tenderTbody.innerHTML = '';
+            const tenders = data.related_tenders || [];
+            if (!tenders.length) {
+              tenderTbody.innerHTML = `<tr><td colspan="4" class="px-3 py-3 text-center text-slate-500">No related tenders</td></tr>`;
+              return;
+            }
+
+            for (const t of tenders) {
+              const tr = document.createElement('tr');
+              tr.className = 'border-b border-slate-200';
+              tr.innerHTML = `
+                <td class="px-3 py-2 text-slate-900 font-medium break-words max-w-[22rem]">${t.title ?? ''}</td>
+                <td class="px-3 py-2 text-slate-700 tabular-nums">${t.estimated_value ?? ''}</td>
+                <td class="px-3 py-2 text-slate-700">${t.publication_date ?? ''}</td>
+                <td class="px-3 py-2 text-slate-700">${t.contract_type ?? ''}</td>
+              `;
+              tenderTbody.appendChild(tr);
+            }
+          } catch (e) {
+            detailsMeta.innerHTML = `Failed to load organization details.`;
+            tenderTbody.innerHTML = `<tr><td colspan="4" class="px-3 py-3 text-center text-red-600">Failed to load related tenders</td></tr>`;
+          } finally {
+            if (loading) loading.classList.add('hidden');
           }
         },
 
@@ -574,6 +983,192 @@
           }
         },
 
+        // ---------- Scheduled Jobs ----------
+        async fetchScheduledJobs() {
+          const res = await fetch('/api/jobs', { headers: { 'Accept': 'application/json' } });
+          if (!res.ok) throw new Error(`Failed to load scheduled jobs: HTTP ${res.status}`);
+          const data = await res.json();
+          const jobs = data.jobs || [];
+          ui.renderScheduledJobs(jobs);
+        },
+
+        renderScheduledJobs(jobs) {
+          const container = document.getElementById('scheduledJobsList');
+          if (!container) return;
+
+          const spinnerEl = document.getElementById('scheduledSpinner');
+          const anyRunning = jobs.some(j => j.current_run?.status === 'running' || String(j.last_status || '').toLowerCase().trim() === 'running');
+          if (spinnerEl) spinnerEl.classList.toggle('opacity-0', !anyRunning);
+
+          if (!jobs.length) {
+            container.innerHTML = `<div class="text-sm text-slate-500">No scheduled jobs configured</div>`;
+            return;
+          }
+
+          container.innerHTML = '';
+          for (const job of jobs) {
+            const card = ui._renderScheduledJobCard(job);
+            container.appendChild(card);
+          }
+        },
+
+        _renderScheduledJobCard(job) {
+          const card = document.createElement('div');
+          card.className = 'bg-white rounded-xl shadow-sm border border-slate-200 p-4';
+
+          const current = job.current_run;
+          const isRunning = current && current.status === 'running';
+
+          const lastTs = job.last_run_at || job.last_run?.finished_at || null;
+          const lastRunText = lastTs ? lastTs.replace('T', ' ').slice(0, 19) : '—';
+
+          const status = isRunning ? 'running' : String(job.last_status || '').toLowerCase().trim();
+          const badgeMap = {
+            running: { cls: 'bg-amber-100 text-amber-800', label: 'Running' },
+            success: { cls: 'bg-emerald-100 text-emerald-800', label: 'Success' },
+            failed: { cls: 'bg-rose-100 text-rose-800', label: 'Failed' },
+          };
+          const badgeInfo = badgeMap[status] || { cls: 'bg-slate-100 text-slate-700', label: 'Idle' };
+
+          const logTail = (current?.log_tail || job.last_run?.log_tail || '—') || '—';
+
+          card.innerHTML = `
+            <div class="flex items-start justify-between gap-4">
+              <div class="min-w-0">
+                <div class="text-sm font-semibold text-slate-900 break-words">${escapeHtml(job.job_name || '')}</div>
+                <div class="text-xs text-slate-500 mt-1">Last run: <span class="tabular-nums">${escapeHtml(lastRunText)}</span></div>
+              </div>
+              <span class="inline-flex items-center px-2 py-1 text-xs font-medium rounded-full ${badgeInfo.cls}" role="status">${badgeInfo.label}</span>
+            </div>
+
+            <div class="mt-3 grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+              <div class="md:col-span-4">
+                <label class="text-xs font-medium text-slate-600 uppercase tracking-wide">Enabled</label>
+                <div class="mt-2 flex items-center gap-3">
+                  <input type="checkbox"
+                    class="h-4 w-4 scheduledEnabled"
+                    data-job-name="${escapeHtml(job.job_name)}"
+                    ${job.enabled ? 'checked' : ''}
+                  />
+                </div>
+              </div>
+
+              <div class="md:col-span-4">
+                <label class="text-xs font-medium text-slate-600 uppercase tracking-wide">Schedule Time</label>
+                <input
+                  type="time"
+                  step="60"
+                  class="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-blue-200 scheduledTime"
+                  data-job-name="${escapeHtml(job.job_name)}"
+                  value="${escapeHtml(job.schedule_time || '')}"
+                  ${isRunning ? 'disabled' : ''}
+                />
+                <p class="text-xs text-red-600 mt-1 hidden scheduledTimeError" data-job-name="${escapeHtml(job.job_name)}"></p>
+              </div>
+
+              <div class="md:col-span-4">
+                <label class="text-xs font-medium text-slate-600 uppercase tracking-wide">Manual run</label>
+                <button
+                  type="button"
+                  class="mt-2 w-full px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition text-sm font-medium scheduledRunNowBtn"
+                  data-job-name="${escapeHtml(job.job_name)}"
+                  ${(!job.enabled || isRunning) ? 'disabled' : ''}
+                >
+                  Run Now
+                </button>
+                <p class="text-xs text-red-600 mt-2 hidden scheduledRunError" data-job-name="${escapeHtml(job.job_name)}"></p>
+              </div>
+            </div>
+
+            <div class="mt-4">
+              <div class="flex items-center justify-between gap-3">
+                <p class="text-sm font-semibold text-slate-900">Recent logs</p>
+              </div>
+              <div
+                class="mt-2 rounded-lg bg-black text-emerald-400 font-mono text-xs p-3 max-h-[10rem] overflow-y-auto shadow-inner [scrollbar-width:thin]"
+                style="white-space: pre-wrap;"
+              >${escapeHtml(logTail)}</div>
+            </div>
+          `;
+
+          const enabledEl = card.querySelector('.scheduledEnabled');
+          const timeEl = card.querySelector('.scheduledTime');
+          const runBtn = card.querySelector('.scheduledRunNowBtn');
+
+          if (enabledEl) enabledEl.disabled = isRunning;
+          if (enabledEl) enabledEl.addEventListener('change', () => ui.onScheduledToggle(job.job_name).catch(() => {}));
+          if (timeEl) timeEl.addEventListener('change', () => ui.onScheduledTimeChange(job.job_name).catch(() => {}));
+          if (runBtn) runBtn.addEventListener('click', () => ui.runScheduledJobNow(job.job_name).catch(() => {}));
+
+          return card;
+        },
+
+        async onScheduledToggle(jobName) {
+          const container = document.getElementById('scheduledJobsList');
+          const enabledEl = container?.querySelector(`.scheduledEnabled[data-job-name="${jobName}"]`);
+          const enabled = !!enabledEl?.checked;
+          await fetch(`/api/jobs/${jobName}/toggle`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enabled }),
+          });
+          await ui.fetchScheduledJobs().catch(() => {});
+        },
+
+        async onScheduledTimeChange(jobName) {
+          const container = document.getElementById('scheduledJobsList');
+          const enabledEl = container?.querySelector(`.scheduledEnabled[data-job-name="${jobName}"]`);
+          const timeEl = container?.querySelector(`.scheduledTime[data-job-name="${jobName}"]`);
+          const enabled = !!enabledEl?.checked;
+          const scheduleTime = (timeEl?.value || '').trim();
+          const timeErr = container?.querySelector(`.scheduledTimeError[data-job-name="${jobName}"]`);
+
+          if (!/^\d{2}:\d{2}$/.test(scheduleTime)) {
+            if (timeErr) {
+              timeErr.innerText = 'Time must be HH:MM';
+              timeErr.classList.remove('hidden');
+            }
+            return;
+          }
+
+          try {
+            await fetch(`/api/jobs`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ job_name: jobName, enabled, schedule_time: scheduleTime }),
+            });
+            if (timeErr) timeErr.classList.add('hidden');
+            await ui.fetchScheduledJobs().catch(() => {});
+          } catch (e) {
+            if (timeErr) {
+              timeErr.innerText = String(e?.message || e);
+              timeErr.classList.remove('hidden');
+            }
+          }
+        },
+
+        async runScheduledJobNow(jobName) {
+          const container = document.getElementById('scheduledJobsList');
+          const runErr = container?.querySelector(`.scheduledRunError[data-job-name="${jobName}"]`);
+          if (runErr) runErr.classList.add('hidden');
+
+          try {
+            const res = await fetch(`/api/jobs/${jobName}/run`, { method: 'POST' });
+            if (!res.ok) {
+              const data = await res.json().catch(() => ({}));
+              throw new Error(data?.detail || `HTTP ${res.status}`);
+            }
+            await ui.fetchScheduledJobs().catch(() => {});
+          } catch (e) {
+            if (runErr) {
+              runErr.innerText = String(e?.message || e);
+              runErr.classList.remove('hidden');
+            } else {
+              alert('Failed to run scheduled job: ' + String(e?.message || e));
+            }
+          }
+        },
+
         // ---------- Jobs ----------
         async refreshJobs() {
           const select = document.getElementById('job-select');
@@ -581,14 +1176,14 @@
 
           select.innerHTML = `<option value="">Loading…</option>`;
           try {
-            const res = await fetch('/api/jobs?limit=20');
+            const res = await fetch('/api/job-queue?limit=20');
             const data = await res.json();
             const jobs = data.jobs || [];
 
             if (!jobs.length) {
               select.innerHTML = `<option value="">No jobs yet</option>`;
               ui.selectedJobId = null;
-              ui.renderJobMeta(null, []);
+              ui.renderJobMeta(null);
               return;
             }
 
@@ -620,7 +1215,7 @@
             ui.setLogState('idle');
             const panel = document.getElementById('job-log-panel');
             if (panel) panel.textContent = '—';
-            ui.renderJobMeta(null, []);
+            ui.renderJobMeta(null);
             return;
           }
 
@@ -634,7 +1229,7 @@
           }
 
           try {
-            const res = await fetch('/api/jobs/' + jobId);
+            const res = await fetch('/api/job-queue/' + jobId);
             const data = await res.json();
             ui.selectedJobId = data.job_id;
 
@@ -649,7 +1244,7 @@
             else if (status === 'error' || status === 'failed') ui.setLogState('error');
             else ui.setLogState('idle');
 
-            ui.renderJobMeta(data, data.logs || []);
+            ui.renderJobMeta(data);
             ui.appendLogs(data.logs || []);
           } catch (e) {
             ui.setLogState('error');
@@ -660,17 +1255,65 @@
               const suffix = 'Failed to load logs.';
               panel.textContent = existing ? (existing + '\\n' + suffix) : suffix;
             }
-            ui.renderJobMeta(null, []);
+            ui.renderJobMeta(null, { loadError: true });
           }
         },
 
-        renderJobMeta(job) {
+        /**
+         * Status badge only (not a button). Maps API job.status → label + Tailwind colors.
+         */
+        syncJobStatusBadge(apiStatus, opts = {}) {
+          const badge = document.getElementById('job-state-badge');
+          if (!badge) return;
+          const base = 'inline-flex items-center px-2 py-1 text-xs font-medium rounded-full';
+          const s = (apiStatus || '').toLowerCase();
+
+          if (opts.loadError) {
+            badge.className = base + ' bg-red-100 text-red-700';
+            badge.innerText = 'Load error';
+            return;
+          }
+
+          if (!apiStatus) {
+            badge.className = base + ' bg-slate-100 text-slate-600';
+            badge.innerText = 'Idle';
+            return;
+          }
+
+          if (s === 'running') {
+            badge.className = base + ' bg-green-100 text-green-700';
+            badge.innerText = 'Running';
+          } else if (s === 'failed' || s === 'error') {
+            badge.className = base + ' bg-red-100 text-red-700';
+            badge.innerText = 'Failed';
+          } else if (s === 'completed' || s === 'done') {
+            badge.className = base + ' bg-blue-100 text-blue-700';
+            badge.innerText = 'Completed';
+          } else if (s === 'stopped') {
+            badge.className = base + ' bg-gray-100 text-gray-700';
+            badge.innerText = 'Stopped';
+          } else if (s === 'stopping') {
+            badge.className = base + ' bg-amber-100 text-amber-800';
+            badge.innerText = 'Stopping…';
+          } else if (s === 'pending') {
+            badge.className = base + ' bg-slate-100 text-slate-700';
+            badge.innerText = 'Pending';
+          } else {
+            badge.className = base + ' bg-slate-100 text-slate-700';
+            badge.innerText = String(apiStatus);
+          }
+        },
+
+        renderJobMeta(job, opts = {}) {
           const setText = (id, v) => { const el = document.getElementById(id); if (el) el.innerText = v ?? '—'; };
+          const setHtml = (id, v) => { const el = document.getElementById(id); if (el) el.innerHTML = v ?? ''; };
+
           if (!job) {
-            setText('job-status', '—');
             setText('job-exit', '—');
             setText('job-started', '—');
-            setText('job-summary', '—');
+            setText('job-duration', '—');
+            setHtml('job-stats', '');
+            ui.syncJobStatusBadge(null, opts);
             const stopBtn = document.getElementById('job-stop-btn');
             if (stopBtn) {
               stopBtn.disabled = true;
@@ -678,17 +1321,9 @@
             }
             return;
           }
-          const statusLabelMap = {
-            pending: 'Pending',
-            running: 'Running',
-            stopping: 'Stopping...',
-            stopped: 'Stopped',
-            completed: 'Completed',
-            failed: 'Failed',
-            done: 'Completed',
-            error: 'Failed',
-          };
-          setText('job-status', statusLabelMap[job.status] || (job.status ?? '—'));
+
+          ui.syncJobStatusBadge(job.status, opts);
+
           setText('job-exit', job.exit_code === null || job.exit_code === undefined ? '—' : String(job.exit_code));
           if (job.started_at) {
             const d = new Date(job.started_at * 1000);
@@ -705,25 +1340,30 @@
             }
           }
 
+          const statusLower = (job.status || '').toLowerCase();
+          if (typeof durationS === 'number') {
+            setText('job-duration', `${durationS.toFixed(1)}s`);
+          } else if (statusLower === 'running' || statusLower === 'stopping' || statusLower === 'pending') {
+            setText('job-duration', '—');
+          } else {
+            setText('job-duration', '—');
+          }
+
           const stopBtn = document.getElementById('job-stop-btn');
           if (stopBtn) {
             const isRunningLike = job.status === 'running' || job.status === 'stopping';
             stopBtn.disabled = !isRunningLike;
-            stopBtn.innerText = job.status === 'stopping' ? 'Stopping...' : 'Stop Job';
+            stopBtn.innerText = job.status === 'stopping' ? 'Stopping…' : 'Stop Job';
           }
 
-          if (job.status === 'completed' || job.status === 'failed' || job.status === 'stopped') {
-            const parts = [];
-            if (typeof durationS === 'number') {
-              parts.push(`duration ${durationS.toFixed(1)}s`);
-            }
-            if (typeof res.fetched === 'number') parts.push(`fetched ${res.fetched}`);
-            if (typeof res.inserted === 'number') parts.push(`inserted ${res.inserted}`);
-            if (typeof res.skipped === 'number') parts.push(`skipped ${res.skipped}`);
-            if (typeof res.errors === 'number') parts.push(`errors ${res.errors}`);
-            setText('job-summary', parts.length ? parts.join(' • ') : '—');
-          } else {
-            setText('job-summary', '—');
+          const statParts = [];
+          if (typeof res.fetched === 'number') statParts.push(`Fetched ${res.fetched}`);
+          if (typeof res.inserted === 'number') statParts.push(`Inserted ${res.inserted}`);
+          if (typeof res.skipped === 'number') statParts.push(`Skipped ${res.skipped}`);
+          if (typeof res.errors === 'number') statParts.push(`Errors ${res.errors}`);
+          const statsEl = document.getElementById('job-stats');
+          if (statsEl) {
+            statsEl.textContent = statParts.length ? statParts.join(' · ') : '';
           }
         },
 
@@ -738,7 +1378,7 @@
           }
 
           try {
-            await fetch('/api/jobs/' + jobId + '/stop', { method: 'POST' });
+            await fetch('/api/job-queue/' + jobId + '/stop', { method: 'POST' });
           } catch (e) {
             // Keep UI stable; polling will refresh status.
           }
@@ -754,32 +1394,6 @@
           // Optionally show a muted idle message only when no logs exist yet.
           // This avoids overwriting real logs or showing a loading placeholder.
           const panel = document.getElementById('job-log-panel');
-
-          // Badge
-          const badge = document.getElementById('job-state-badge');
-          if (badge) {
-            badge.className = 'inline-flex items-center rounded-full border px-2 py-0.5 text-xs';
-
-            if (state === 'idle') {
-              badge.innerText = 'Idle';
-              badge.classList.add('border-slate-200', 'bg-slate-100', 'text-slate-700');
-            } else if (state === 'loading') {
-              badge.innerText = 'Running';
-              badge.classList.add('border-blue-200', 'bg-blue-50', 'text-blue-700');
-            } else if (state === 'stopping') {
-              badge.innerText = 'Stopping...';
-              badge.classList.add('border-amber-200', 'bg-amber-50', 'text-amber-700');
-            } else if (state === 'stopped') {
-              badge.innerText = 'Stopped';
-              badge.classList.add('border-slate-300', 'bg-slate-100', 'text-slate-700');
-            } else if (state === 'success') {
-              badge.innerText = 'Completed';
-              badge.classList.add('border-emerald-200', 'bg-emerald-50', 'text-emerald-700');
-            } else if (state === 'error') {
-              badge.innerText = 'Error';
-              badge.classList.add('border-red-200', 'bg-red-50', 'text-red-700');
-            }
-          }
 
           if (state === 'idle' && panel && ui.logCursor === 0) {
             const current = (panel.textContent || '').trim();
@@ -840,13 +1454,25 @@
         },
 
         async doSearch() {
-          const query = document.getElementById('search-query').value.trim();
-          if (!query) return;
+          console.log('doSearch() called');
+          const queryEl = document.getElementById('search-query');
+          const query = queryEl ? queryEl.value.trim() : '';
 
           const btn = document.getElementById('searchBtn');
           const spinner = btn ? btn : null;
           const statusEl = document.getElementById('searchStatus');
           const resultsEl = document.getElementById('results');
+
+          if (!btn || !statusEl || !resultsEl) {
+            console.error('Search UI elements missing', { btn, statusEl, resultsEl });
+            return;
+          }
+
+          if (!query) {
+            statusEl.innerText = 'Please enter a search query.';
+            resultsEl.innerHTML = '';
+            return;
+          }
 
           btn.disabled = true;
           statusEl.innerText = 'Searching…';
@@ -873,6 +1499,7 @@
           if (eu === 'false') payload.eu_funded = false;
 
           try {
+            console.log('Search payload:', payload);
             const res = await fetch('/api/search', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -887,6 +1514,8 @@
             statusEl.innerText = 'Search failed.';
             resultsEl.innerHTML = `<div class="text-sm text-slate-500">Unable to load results.</div>`;
           } finally {
+            // Refresh dashboard metrics (including Search Queries count).
+            ui.fetchStatus().catch(() => {});
             btn.disabled = false;
           }
         },
@@ -991,24 +1620,91 @@
         }
 
         // Default initial view.
+        ui.go('status');
         ui.fetchStatus().catch(() => {});
 
         // Initial jobs load.
         ui.refreshJobs().then(() => ui.refreshSelectedJob()).catch(() => {});
+        ui.fetchScheduledJobs().catch(() => {});
 
-        // Poll job logs while user stays on job monitor area.
+        // Wire search button explicitly.
+        const searchBtn = document.getElementById('searchBtn');
+        if (searchBtn) {
+          searchBtn.addEventListener('click', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('Search clicked');
+            await ui.doSearch();
+          });
+        }
+
+        // Poll job status; when a job finishes, refresh DB-backed pages.
         setInterval(() => {
           const jobsEl = document.getElementById('jobs');
-          if (!jobsEl) return;
-          const rect = jobsEl.getBoundingClientRect();
-          const isVisible = rect.top < window.innerHeight * 0.8 && rect.bottom > 0;
-          if (!isVisible) return;
+          const jobId = document.getElementById('job-select')?.value || ui.selectedJobId || ui.currentJobId;
+          if (!jobId) return;
 
-          const statusText = (document.getElementById('job-status')?.innerText || '').toLowerCase();
-          if (statusText === 'completed' || statusText === 'failed' || statusText === 'stopped') return;
+          const pollNow = async () => {
+            if (ui.jobPollInFlight) return;
+            ui.jobPollInFlight = true;
+            try {
+              let isVisible = false;
+              if (jobsEl) {
+                const rect = jobsEl.getBoundingClientRect();
+                isVisible = rect.top < window.innerHeight * 0.8 && rect.bottom > 0;
+              }
 
-          ui.refreshSelectedJob().catch(() => {});
+              if (!isVisible) {
+                // Lightweight polling when job monitor is hidden (avoid log payloads).
+                const res = await fetch(`/api/job-queue/${jobId}/status`);
+                const data = await res.json();
+
+                ui.syncJobStatusBadge(data.status, {});
+
+                const s = String(data.status || '').toLowerCase().trim();
+                const isFinal = s === 'completed' || s === 'failed' || s === 'stopped';
+                if (isFinal && ui._statsRefreshedJobId !== jobId) {
+                  ui._statsRefreshedJobId = jobId;
+                  await ui.fetchStatus().catch(() => {});
+                  if (ui.currentView === 'tenders') ui.fetchTenders().catch(() => {});
+                  if (ui.currentView === 'organizations') ui.fetchOrganizations().catch(() => {});
+                }
+                return;
+              }
+
+              // Visible: keep logs fresh using the heavier endpoint.
+              const badgeText = (document.getElementById('job-state-badge')?.innerText || '').toLowerCase().trim();
+              if (badgeText === 'completed' || badgeText === 'failed' || badgeText === 'stopped') {
+                if (ui._statsRefreshedJobId !== jobId) {
+                  ui._statsRefreshedJobId = jobId;
+                  await ui.fetchStatus().catch(() => {});
+                  if (ui.currentView === 'tenders') ui.fetchTenders().catch(() => {});
+                  if (ui.currentView === 'organizations') ui.fetchOrganizations().catch(() => {});
+                }
+                return;
+              }
+
+              ui.refreshSelectedJob().catch(() => {});
+            } finally {
+              ui.jobPollInFlight = false;
+            }
+          };
+
+          pollNow().catch(() => {});
         }, 2500);
+
+        // Poll scheduled jobs panel.
+        setInterval(() => {
+          const jobsEl = document.getElementById('jobs');
+          if (!jobsEl || jobsEl.classList.contains('hidden')) return;
+          if (ui.scheduledJobsPollInFlight) return;
+          ui.scheduledJobsPollInFlight = true;
+          ui.fetchScheduledJobs()
+            .catch(() => {})
+            .finally(() => {
+              ui.scheduledJobsPollInFlight = false;
+            });
+        }, 5000);
       })();
     </script>
   </body>

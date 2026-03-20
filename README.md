@@ -1,407 +1,450 @@
 # Italian Tender Intelligence System
 
-End-to-end MVP system for ingesting, enriching, and matching Italian public procurement tenders.
+End-to-end system for ingesting, enriching, and searching Italian public procurement tenders, with optional document storage.
 
-## Features
+This repository implements a production-style pipeline aligned with challenge Parts 1-5. The demo flow focuses on CLI commands, with a lightweight web UI for observability and scheduled job control.
 
-- **Part 1**: Automated tender ingestion from ANAC with AI enrichment (summaries + embeddings)
-- **Part 2**: Organization extraction and deduplication from tender participants
-- **Part 3**: Hybrid search (structured filters + semantic vector search)
-- **Part 4**: Document portal analysis and download pipeline
-- **Part 5**: Complete CLI interface
+## Project Overview
 
-## Architecture
+Core capabilities:
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        INGESTION LAYER                          │
-│  ┌──────────────┐      ┌─────────────┐      ┌──────────────┐  │
-│  │  ANAC API    │─────▶│  Extractor  │─────▶│   OpenAI     │  │
-│  │  (OCDS JSON) │      │  + Parser   │      │  Enrichment  │  │
-│  └──────────────┘      └─────────────┘      └──────────────┘  │
-└───────────────────────────────────────────────────────────────┬─┘
-                                │                                 │
-                                ▼                                 │
-┌─────────────────────────────────────────────────────────────────┘
-│                        STORAGE LAYER                            │
-│              PostgreSQL + pgvector                              │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌─────────┐       │
-│  │ Tenders  │  │  Orgs    │  │ Issuers  │  │  Docs   │       │
-│  │ +vectors │  │          │  │          │  │         │       │
-│  └──────────┘  └──────────┘  └──────────┘  └─────────┘       │
-└───────────────────────────────────────────────────────────────┬─┘
-                                │                                 │
-                                ▼                                 │
-┌─────────────────────────────────────────────────────────────────┘
-│                        SEARCH LAYER                             │
-│  ┌──────────────┐      ┌─────────────┐      ┌──────────────┐  │
-│  │  Structured  │      │   Vector    │      │    Hybrid    │  │
-│  │   Filters    │─────▶│   Search    │─────▶│   Ranking    │  │
-│  │  (SQL WHERE) │      │  (pgvector) │      │  (weighted)  │  │
-│  └──────────────┘      └─────────────┘      └──────────────┘  │
-└─────────────────────────────────────────────────────────────────┘
-```
+- Ingest tenders from ANAC OCDS (with fallback behavior)
+- Extract and deduplicate participating organizations
+- Perform hybrid search (structured filters + vector similarity)
+- Analyze tender document portal distribution and export `portal_analysis.csv`
+- Download tender-related documents from the selected portal and store them in S3-compatible object storage (MinIO)
 
 ## Quick Start
 
-### Production-Ready Prerequisites
-- Python 3.9+
-- PostgreSQL 14+ with the `pgvector` extension available (extension type is `vector`)
-- An OpenAI API key (optional but recommended for good summaries and search ranking)
+### 0) Clone repository
+```bash
+# Replace with your repo URL (or just `cd` if you've already cloned)
+git clone <REPO_URL>
+cd <REPO_ROOT>/tender
+```
 
-### 1) Create the environment
-From the `tender/` directory (this folder):
+### Prerequisites
+
+- Python 3.9+
+- PostgreSQL with the `pgvector` extension
+- (Optional) OpenAI API key for enrichment and embedding generation
+- (Required for document download) S3-compatible storage (MinIO recommended)
+
+Optional (recommended for a first run): Docker Compose
+- `docker compose up -d` (starts Postgres + pgvector)
+- Postgres will be available at `localhost:5432` with DB name `tender_db`
+Run `docker compose up -d` before `init-db`.
+
+### 1) Create environment
+
+From the `tender/` directory:
+
 ```bash
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 2) Configure environment (do not commit secrets)
-Create a file named `.env` in `tender/`:
+### 2) Configure environment
+
+Create `tender/.env` from `tender/.env.example`:
+
 ```bash
-# Database connection (recommended: local unix socket)
-DATABASE_URL=postgresql:///tender_db
-
-# Required for best search quality. If omitted, the system still runs but
-# summaries/embeddings fall back (search similarity will be lower quality).
-OPENAI_API_KEY=sk-your-key-here
-
-# Optional: ANAC API key (if your ANAC access needs it)
-ANAC_API_KEY=
-
-# Optional: logging
-LOG_LEVEL=INFO
-
-# Optional: document storage (only needed if you use the S3 download pipeline)
-S3_ENDPOINT=https://s3.amazonaws.com
-S3_ACCESS_KEY=
-S3_SECRET_KEY=
-S3_BUCKET=tender-documents
+cp .env.example .env
 ```
 
-### 3) Database setup (idempotent)
-The `scripts/init_db.py` script:
-- enables the `vector` extension
-- creates all tables (safe to run multiple times)
+Ensure `DATABASE_URL` points to your PostgreSQL instance and that the S3 values are correct if you plan to run document downloads.
+
+### 3) Initialize database schema
 
 ```bash
-# 1) Install PostgreSQL server + client + build tooling (Ubuntu/Debian)
-sudo apt-get update
-sudo apt-get install -y postgresql postgresql-contrib postgresql-server-dev-14
-
-# 2) Install pgvector:
-#    Option A (if available as a package on your distro)
-sudo apt-get install -y postgresql-14-pgvector
-
-#    Option B (always works): build from source
-#    git clone https://github.com/pgvector/pgvector.git
-#    cd pgvector && make && sudo make install
-
-# 3) Create database (run as postgres user; safe if it already exists)
-sudo -u postgres createdb tender_db 2>/dev/null || echo "Database already exists"
-
-# 4) Initialize schema (run inside venv; loads .env automatically)
-./venv/bin/python scripts/init_db.py
+./venv/bin/python -m src.cli.main init-db
 ```
 
-### 4) First run
+This script is idempotent: you can re-run it safely.
+
+Expected log snippets:
+- `Initializing database...`
+- `Enabling pgvector extension...`
+- `Creating tables...`
+- `✓ Database initialized successfully`
+
+## Environment Variables (from `.env.example`)
+
+The CLI and web server load `.env` automatically from the `tender/` folder, so the working directory does not matter.
+
+### Required for the app to run
+- `DATABASE_URL`: PostgreSQL connection string.
+
+### OpenAI (optional)
+- `OPENAI_API_KEY`: if unset, the app still runs:
+  - summaries fall back to truncated titles
+  - embeddings use a deterministic pseudo-embedding fallback (so `search` still returns results)
+- `OPENAI_MODEL`: chat model used for summaries (default: `gpt-5.4-mini`).
+
+### ANAC (optional)
+- `ANAC_API_KEY`: optional token for ANAC Open Data. Leaving it blank can still work but may hit stricter WAF/rate limits.
+
+### Object storage (optional)
+- `S3_ENDPOINT`: S3/MinIO endpoint URL.
+- `S3_ACCESS_KEY`: access key for S3/MinIO.
+- `S3_SECRET_KEY`: secret key for S3/MinIO.
+- `S3_BUCKET`: bucket name (default: `tenders`).
+
+If S3 env vars are not set, document download falls back to local storage under `.tmp_storage/`.
+
+### Demo / tuning (optional)
+- `INGESTION_DAYS_BACK`: default ingestion window size.
+- `EXTRACT_ORGS_COMMIT_EVERY`: commit frequency during `extract-orgs`.
+- `DOWNLOAD_DOCS_LIMIT`: default per-portal limit during document download.
+- `PORTAL_ANALYSIS_DEFAULT_FILE`: default name for `portal_analysis.csv`.
+- `INGESTION_MAX_TENDERS`: safety valve for `ingest` (set to e.g. `50` for a quick demo).
+
+## CLI Usage
+
+All commands are implemented in `src/cli/main.py` (Click-based). They print progress and summary counts for demo readiness.
+
+Activate your virtual environment first:
+
 ```bash
-# Ingest tenders (uses mock data if ANAC API fetch fails)
-./venv/bin/python -m src.cli.main ingest --days 30
-
-# Extract organizations from tender participants
-./venv/bin/python -m src.cli.main extract-orgs --days 30
-
-# Check database statistics
-./venv/bin/python -m src.cli.main status
-
-# Try a search
-./venv/bin/python -m src.cli.main search --query "road maintenance services" --limit 5
+source venv/bin/activate
 ```
 
-### Re-running safely (important for production)
-- `ingest` is idempotent by `tender_id` (existing tenders are skipped).
-- If you change prompts/models or want to regenerate embeddings/summaries, you must explicitly reprocess data (this repo currently does not expose a “force re-embed” flag).
+### Initialize database
 
-## Usage
-
-All commands assume your virtual environment is active (`source venv/bin/activate`). If you prefer, replace `python` with `./venv/bin/python`.
-
-### CLI Commands
-
-#### Ingestion
+Run once (idempotent) to create tables and enable `pgvector`:
 
 ```bash
-# Ingest tenders from last 30 days
-python -m src.cli.main ingest --days 30
-
-# Extract organizations
-python -m src.cli.main extract-orgs --days 30
+python -m src.cli.main init-db
 ```
 
-#### Search
+### Ingest tenders
+
+Fetch tenders in a date range and write to the `tenders` table.
 
 ```bash
-# Basic search
-python -m src.cli.main search --query "road maintenance services"
-
-# Search with filters
-python -m src.cli.main search \
-  --query "IT equipment" \
-  --min-value 100000 \
-  --max-value 500000 \
-  --contract-type supplies
-
-# Search by location
-python -m src.cli.main search \
-  --query "construction works" \
-  --nuts ITC4C
-
-# Search EU-funded tenders
-python -m src.cli.main search \
-  --query "digital transformation" \
-  --eu-funded true
+python -m src.cli.main ingest --start-date YYYY-MM-DD --end-date YYYY-MM-DD
 ```
 
-#### Demo Searches
+For a network-free demo, append `--demo-data` (loads deterministic data from `db_dumps/`).
+
+Example:
 
 ```bash
-# List organizations
-python -m src.cli.main list-orgs
-
-# Run 5 demo searches for an organization
-python -m src.cli.main demo-search --org-id 1
+python -m src.cli.main ingest --start-date 2025-08-01 --end-date 2025-08-05
 ```
 
-#### Document Analysis
+### Extract organizations
+
+Parse tender participants and write to `organizations` and `tender_participants`.
 
 ```bash
-# Analyze portal distribution
+python -m src.cli.main extract-orgs --start-date YYYY-MM-DD --end-date YYYY-MM-DD
+```
+
+Example:
+
+```bash
+python -m src.cli.main extract-orgs --start-date 2025-08-01 --end-date 2025-08-05
+```
+
+### Search
+
+Run hybrid search with optional structured filters. Each CLI search is persisted to `search_queries` for demo tracking (even if results are empty).
+
+```bash
+python -m src.cli.main search --query "TEXT" --limit N
+```
+
+Optional filters:
+
+- `--min-value FLOAT`
+- `--max-value FLOAT`
+- `--cpv STRING`
+- `--nuts STRING`
+- `--contract-type services|supplies|works`
+- `--eu-funded true|false`
+
+Examples:
+
+```bash
+python -m src.cli.main search --query "road maintenance and infrastructure services" --contract-type services --limit 5
+python -m src.cli.main search --query "IT equipment" --min-value 100000 --limit 5
+python -m src.cli.main search --query "digital transformation" --eu-funded true --limit 5
+```
+
+### Analyze document portals
+
+Reads portal URLs from stored tenders and outputs `portal_analysis.csv`.
+
+```bash
 python -m src.cli.main analyze-portals --output portal_analysis.csv
-
-# Download documents from specific portal
-python -m src.cli.main download-docs \
-  --portal portale-documenti.comune.milano.it \
-  --limit 10
 ```
 
-#### System Status
+It always writes the CSV header; if there are no usable portal domains yet, the file may contain only the header.
+
+### Download documents
+
+Two variants exist:
+
+- `download-docs`: download from a specified portal domain (`--portal`)
+- `download-documents`: download from the top portal found in `portal_analysis.csv`
+
+Download from top portal:
 
 ```bash
-# Show database statistics
+python -m src.cli.main download-documents --portal-analysis-file portal_analysis.csv --limit N
+```
+
+If `portal_analysis.csv` is empty (header-only), the command skips download gracefully.
+
+Download from a specific portal:
+
+```bash
+python -m src.cli.main download-docs --portal "example.portal.it" --limit N
+```
+
+### System status
+
+Shows current DB counts (including the correct `tender_documents` count).
+
+```bash
 python -m src.cli.main status
 ```
 
-### Web UI (Modern Dashboard)
-This repo ships a lightweight web dashboard that wraps the existing CLI actions.
+## UI (Web Dashboard)
 
-1. Start the server:
+The repository also ships a lightweight web UI for running the same demo steps with quick visibility into counts, logs, and scheduled jobs.
+
+### Start the server
+
 ```bash
 ./venv/bin/python -m src.web.server
 ```
 
-2. Open in your browser:
+Then open:
+
 - http://localhost:8000
 
-3. Actions you can run from the UI:
-- `ingest`
-- `extract-orgs`
-- `demo-search`
-- `analyze-portals`
-- `download-docs`
-- quick `search` with filters
-- job monitor + logs
+### What you can manage from the UI
 
-### Cron Setup
+Expected UI behavior during the demo:
+- After `init-db`, the counts start at `0`.
+- After `ingest`, the UI status strip shows non-zero `tenders` and `issuers`.
+- After each `search`, the UI status strip’s `search_queries` count increments (even if no results are found).
+- After `analyze-portals`, `portal_analysis.csv` should be generated on disk (and the UI can use it for download).
+- After `download-documents`, the UI status strip’s `documents` count increases when document URLs are available and downloads succeed.
 
-For daily automated ingestion:
+1. **Status strip**
+   - Shows live DB-backed metrics (tenders, organizations, issuers, stored documents, search query count).
+   - Use the **Refresh** button to force a fresh `/api/status` read.
+
+2. **Search**
+   - Open the **Search** modal from the sidebar.
+   - Searches are executed via `POST /api/search` and are persisted into `search_queries` for demo tracking.
+
+3. **Primary Actions**
+   - **Ingest Tenders**: runs `ingest` (background job)
+   - **Extract Organizations**: runs `extract-orgs` (background job)
+
+4. **Secondary Actions**
+   - **Analyze Portals**: runs `analyze-portals` and produces `portal_analysis.csv`
+   - **Download Documents**: runs `download-docs` (portal domain MVP) from the UI input
+
+5. **Job Monitor + Scheduled Jobs**
+   - The scheduled jobs panel is dynamic: it fetches configured jobs from `GET /api/jobs`.
+   - For each job you can:
+     - Toggle **Enabled/Disabled** (persisted to `scheduled_jobs`)
+     - Adjust **Schedule Time** (HH:MM)
+     - Click **Run Now** (calls `POST /api/jobs/{job_name}/run`)
+   - Recent logs are shown from `job_runs.log_tail`.
+
+## Demo Walkthrough
+
+This walkthrough is designed so each step can run independently and leaves visible traces:
+
+- Step 1 writes tenders into PostgreSQL
+- Step 2 writes organizations into PostgreSQL
+- Step 3 persists search queries into `search_queries`
+- Step 4 writes `portal_analysis.csv`
+- Step 5 inserts into `tender_documents` and uploads to S3/MinIO
+
+### Step 1: Ingest tenders
 
 ```bash
-# Ensure the cron script is executable
-chmod +x scripts/cron_ingestion.sh
-
-# Add to crontab (runs daily at 2 AM)
-crontab -e
-
-# Use an absolute path to the repo (script activates the venv and runs the CLI)
-0 2 * * * /full/path/to/tender/scripts/cron_ingestion.sh
+YESTERDAY="$(date -u -d 'yesterday' +%F)"
+python -m src.cli.main ingest --start-date "$YESTERDAY" --end-date "$YESTERDAY" --demo-data
 ```
 
-#### Production logging
-- The CLI writes structured logs to stdout/stderr.
-- In cron, redirect output to a log file (example):
-  - `0 2 * * * /full/path/to/tender/scripts/cron_ingestion.sh >> /var/log/tender/cron.log 2>&1`
+Verify:
 
-#### Basic health check
-After each scheduled run:
 ```bash
-./venv/bin/python -m src.cli.main status
-./venv/bin/python -m src.cli.main search --query "digital transformation consulting services" --limit 3
+python -m src.cli.main status
 ```
+
+Expected:
+- `Tenders:` and `Issuers:` are > 0
+- `Documents:` is typically 0 before downloading
+- The command prints `Loading deterministic demo dataset...` and a `✓ Demo load completed: ...` summary
+
+### Step 2: Extract organizations
+
+```bash
+YESTERDAY="$(date -u -d 'yesterday' +%F)"
+python -m src.cli.main extract-orgs --start-date "$YESTERDAY" --end-date "$YESTERDAY"
+```
+
+Verify organizations increased:
+
+```bash
+python -m src.cli.main status
+```
+
+Expected:
+- In demo mode, organizations may already exist (created alongside the offline tenders load).
+- If ANAC is blocked, you may see `Organizations:` unchanged without a crash (known limitation)
+
+### Step 3: Run search queries
+
+Run one or more searches:
+
+```bash
+python -m src.cli.main search --query "road maintenance and infrastructure services" --contract-type services --limit 5
+python -m src.cli.main search --query "IT equipment" --min-value 100000 --limit 5
+```
+
+Verify persistence:
+
+```sql
+SELECT COUNT(*) FROM search_queries;
+```
+
+### Step 4: Analyze document portals
+
+```bash
+python -m src.cli.main analyze-portals --output portal_analysis.csv
+```
+
+The output CSV is always created and has header:
+
+```text
+portal_domain,tender_count
+```
+
+### Step 5: Download documents
+
+```bash
+python -m src.cli.main download-documents --portal-analysis-file portal_analysis.csv --limit 10
+```
+
+Verify:
+
+```sql
+SELECT COUNT(*) FROM tender_documents;
+```
+
+Expected:
+- If document links exist (in demo mode we backfill a stable portal URL) and downloads succeed: `tender_documents` count increases
+- Logs include `Document download summary for <portal>:` with `uploaded=<n>` and `failures=<m>`
+- If S3 env vars are not configured: downloaded files are stored locally under `.tmp_storage/tenders/`
+- If downloads fail or document URLs are missing: the command still completes, but `tender_documents` may remain 0
+
+## Example Search Queries
+
+Use these as realistic demo queries:
+
+```bash
+python -m src.cli.main search --query "road maintenance and infrastructure services" --contract-type services --limit 5
+python -m src.cli.main search --query "IT equipment computers and technology supplies" --min-value 100000 --limit 5
+python -m src.cli.main search --query "building renovation construction works" --contract-type works --limit 5
+python -m src.cli.main search --query "digital transformation consulting services" --eu-funded true --limit 5
+python -m src.cli.main search --query "renewable energy solar panels installation" --limit 5
+```
+
+## System Architecture
+
+High-level components:
+
+- Ingestion layer (`src/ingestion`)
+  - ANAC OCDS client -> enrich -> store in `tenders`
+  - backfills missing portal info for downstream portal analysis
+- Organization extraction (`src/organizations`)
+  - reads tender participants -> normalizes tax IDs -> stores `organizations` + `tender_participants`
+- Search layer (`src/search`)
+  - hybrid search: structured filtering + vector similarity via pgvector
+- Document portal analysis (`src/documents/analyzer.py`)
+  - normalizes `tenders.document_portal_url` domains and exports `portal_analysis.csv`
+- Document storage and download (`src/documents/downloader.py`)
+  - downloads content (PDF/HTML)
+  - uploads to MinIO/S3 bucket (`tenders`)
+  - inserts metadata into `tender_documents`
+- Scheduled jobs + UI
+  - `src/scheduler` + `src/web/server.py` manage job definitions and UI control
 
 ## Data Model
 
-### Core Tables
+Main tables:
 
-- **issuers**: Contracting authorities (municipalities, regions, etc.)
-- **tenders**: Public tenders with AI-generated summaries and embeddings
-- **organizations**: Bidders/participants (deduplicated by tax_id)
-- **tender_participants**: Many-to-many relationship between tenders and organizations
-- **documents**: Downloaded tender documents with storage URLs
-- **search_queries**: Saved searches for demo tracking
+- `tenders`
+  - Identifies each tender (`tender_id`)
+  - Stores embeddings and portal URL fields
+- `organizations`
+  - Deduplicated by normalized tax ID / identity
+- `tender_participants`
+  - Many-to-many relationship between tenders and organizations
+- `tender_documents`
+  - One row per tender document downloaded
+  - Tracks `storage_path`, `source_url`, `file_type`, and `file_name`
+- `search_queries`
+  - One row per search request made from the API or CLI (persisted even for empty results)
 
-### Key Fields
+## Portal Analysis (CSV)
 
-- `embedding` (vector 1536): OpenAI embedding for semantic search
-- `searchable_text` (text): Rich text combining all tender metadata
-- `summary` (varchar 240): AI-generated concise summary
-- `cpv_codes`, `nuts_codes` (arrays): Classification codes for filtering
+`analyze-portals` produces `portal_analysis.csv`:
+
+- Column 1: `portal_domain` (normalized: lowercase, `www.` stripped)
+- Column 2: `tender_count`
+
+The analyzer always writes the CSV header, even when there are no tenders with valid portal URLs.
+
+## Document Storage (MinIO / S3)
+
+Documents are downloaded from each tender’s `document_portal_url`:
+
+- If the URL is missing, the downloader falls back to the tender URL
+- File type detection:
+  - detects PDF via response content-type or `%PDF` magic bytes
+  - otherwise stores the HTML page
+- Upload:
+  - uploads to the configured S3 bucket
+  - if S3 env vars are missing, stores locally under `.tmp_storage/`
+  - `storage_path` format is `tenders/<file_name>`
+
+## Known Limitations
+
+- External ingestion may be affected by WAF/rate limiting on ANAC endpoints
+- For a reliable offline demo, use `ingest --demo-data` (loads deterministic CSV dumps and backfills portal URLs so document download can still run)
+- Some tenders may contain incomplete OCDS payloads; the system uses fallback logic to ensure portal analysis remains possible
+- Document download currently targets one top portal domain per run (as selected from `portal_analysis.csv`)
+- HTML-to-PDF conversion is not performed (HTML is stored when PDF is not available)
+- Scheduled jobs are best-effort and designed to avoid concurrent runs per job name
+- If `OPENAI_API_KEY` is not set, the system still runs using:
+  - title-based summaries
+  - deterministic pseudo-embeddings (search works, but relevance may be lower)
+- If S3/MinIO variables are not set, downloaded documents are stored locally under `.tmp_storage/` instead of being uploaded
 
 ## Design Decisions
 
-### 1. Postgres + pgvector (not separate vector DB)
-- **Why**: Single database, simpler operations, sufficient for MVP scale
-- **Trade-off**: Slightly slower than dedicated vector DB, but easier to manage
-
-### 2. OpenAI API (not local models)
-- **Why**: Better quality, minimal setup, low cost (~$0.07 per 1000 tenders)
-- **Trade-off**: External dependency, but cost is negligible
-
-### 3. Mock data fallback (not robust scraping)
-- **Why**: API may be blocked, scraping is fragile and out of scope
-- **Trade-off**: Demo uses realistic mock data, but architecture is production-ready
-
-### 4. Hybrid search = filters + vectors (not BM25)
-- **Why**: Simpler implementation, vectors handle semantic matching well
-- **Trade-off**: No keyword boosting, but sufficient for MVP
-
-### 5. One portal download (not all portals)
-- **Why**: Each portal has different structure, would require custom scrapers
-- **Trade-off**: Incomplete document coverage, but demonstrates approach
-
-### 6. CLI-first (not web UI)
-- **Why**: Faster to build, easier to test, scriptable
-- **Trade-off**: Less user-friendly, but meets MVP requirements
-
-## Cost Estimates
-
-Per 1000 tenders:
-- **Summaries**: ~$0.05 (gpt-4o-mini, 100 tokens avg)
-- **Embeddings**: ~$0.02 (text-embedding-3-small, 1536 dims)
-- **Total**: ~$0.07 per 1000 tenders
-
-For 30 days of tenders (~100-500 tenders): **< $0.50/month**
-
-## Project Structure
-
-```
-tender/
-├── src/
-│   ├── config.py                    # Environment configuration
-│   ├── database/
-│   │   ├── connection.py            # SQLAlchemy engine + session
-│   │   ├── models.py                # ORM models
-│   │   └── schema.sql               # Raw SQL schema
-│   ├── ingestion/
-│   │   ├── client.py                # ANAC API client (with mock fallback)
-│   │   ├── enrichment.py            # OpenAI: summary + embedding
-│   │   └── pipeline.py              # Orchestration
-│   ├── organizations/
-│   │   └── extractor.py             # Extract orgs from participants
-│   ├── search/
-│   │   ├── filters.py               # Structured SQL filtering
-│   │   ├── semantic.py              # Vector similarity search
-│   │   └── hybrid.py                # Combine filters + vectors
-│   ├── documents/
-│   │   ├── analyzer.py              # Portal analysis → CSV
-│   │   └── downloader.py            # Download from ONE portal
-│   └── cli/
-│       └── main.py                  # Click-based CLI
-├── scripts/
-│   ├── init_db.py                   # Database initialization
-│   └── cron_ingestion.sh            # Daily cron wrapper
-├── data/
-│   └── mock_tenders.json            # Mock OCDS data
-├── requirements.txt
-├── .env                       # Local environment config (do not commit)
-└── README.md
-```
-
-## Limitations (MVP)
-
-This is an MVP with intentional simplifications:
-
-1. **Mock data**: Uses realistic mock data if ANAC API is unavailable
-2. **No scraping**: Missing fields from API are stored as NULL
-3. **Placeholder downloads**: Document download implemented for one portal only
-4. **No authentication**: Public system, no user management
-5. **Synchronous**: No async processing (sufficient for daily cron)
-6. **Basic error handling**: Fail fast, log errors, continue processing
-7. **No caching**: No Redis or result caching
-8. **No testing**: Manual CLI testing only
-
-## Future Enhancements
-
-- Real-time API integration with retry logic
-- Multi-portal scraping with custom extractors
-- Advanced RAG with document content parsing
-- Web UI dashboard with React/Next.js
-- Email notifications for matching tenders
-- ML-based tender recommendations
-- Multi-tenant authentication
-- Async processing with Celery
-- Comprehensive test suite
-- Monitoring and alerting
-
-## Troubleshooting
-
-### Database connection errors
-```bash
-# Check PostgreSQL is running
-sudo systemctl status postgresql
-
-# Verify database exists
-psql -l | grep tender_db
-
-# Test connection
-sudo -u postgres psql -d tender_db -c "SELECT 1;"
-```
-
-### pgvector extension not found
-```bash
-# Install pgvector
-sudo apt-get install postgresql-14-pgvector
-
-# Or build from source
-git clone https://github.com/pgvector/pgvector.git
-cd pgvector
-make
-sudo make install
-```
-
-### OpenAI API errors
-```bash
-# Verify API key is set
-grep OPENAI_API_KEY .env
-
-# Test API key
-python -c "import openai; openai.api_key='your-key'; print(openai.models.list())"
-```
-
-### No results from search
-```bash
-# Check if tenders have embeddings
-python -m src.cli.main status
-
-# Re-run ingestion if needed
-python -m src.cli.main ingest --days 30
-```
+- Single PostgreSQL database with pgvector for simplicity and operational ease
+- Idempotency:
+  - ingestion skips existing `tender_id`s
+  - document download skips already present `tender_id` rows in `tender_documents`
+- Fallback URL logic:
+  - ensures `document_portal_url` and portal domain analysis remain robust even with missing OCDS fields
+- Demo-first observability:
+  - CLI and API persist searches (`search_queries`) and expose accurate dashboard metrics
 
 ## License
 
 MIT
 
-## Support
-
-For issues or questions, please check the troubleshooting section or review the code comments in the source files.

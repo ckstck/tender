@@ -13,7 +13,7 @@ All 5 parts of the Italian Tender Intelligence System have been successfully imp
   - Handles API failures without crashing
   
 - **AI Enrichment** (`src/ingestion/enrichment.py`)
-  - Generates 240-char summaries using gpt-4o-mini
+  - Generates 240-char summaries using gpt-5.4-mini
   - Creates rich searchable text for RAG
   - Generates 1536-dim embeddings using text-embedding-3-small
   - Cost: ~$0.07 per 1000 tenders
@@ -80,7 +80,7 @@ All 5 parts of the Italian Tender Intelligence System have been successfully imp
 2. `tenders` - Main entity with AI fields (summary, searchable_text, embedding)
 3. `organizations` - Bidders (deduplicated)
 4. `tender_participants` - Many-to-many relationship
-5. `documents` - Document metadata
+5. `tender_documents` - Stored document metadata (S3/MinIO)
 6. `search_queries` - Demo search tracking
 
 **Key features:**
@@ -145,7 +145,7 @@ tender/
 - Basic error handling (fail fast, log, continue)
 
 ### 3. Cost-Optimized AI
-- gpt-4o-mini for summaries (~$0.05/1K)
+- gpt-5.4-mini for summaries (~$0.05/1K)
 - text-embedding-3-small for vectors (~$0.02/1K)
 - Single-pass enrichment (no re-processing)
 - Total: $0.07 per 1000 tenders
@@ -207,13 +207,14 @@ tender/
 ### Setup (one-time)
 ```bash
 python scripts/init_db.py
-python -m src.cli.main ingest --days 30
-python -m src.cli.main extract-orgs --days 30
+python -m src.cli.main ingest --start-date YYYY-MM-DD --end-date YYYY-MM-DD
+python -m src.cli.main extract-orgs --start-date YYYY-MM-DD --end-date YYYY-MM-DD
 ```
 
 ### Daily operations
 ```bash
-python -m src.cli.main ingest --days 1
+YESTERDAY="$(date -u -d 'yesterday' +%F)"
+python -m src.cli.main ingest --start-date "$YESTERDAY" --end-date "$YESTERDAY"
 python -m src.cli.main status
 ```
 

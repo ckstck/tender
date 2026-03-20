@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS tenders (
     
     tender_url TEXT,
     document_portal_url TEXT,
+    source_platform VARCHAR(20),
     
     summary VARCHAR(240),
     searchable_text TEXT,
@@ -59,6 +60,8 @@ CREATE TABLE IF NOT EXISTS organizations (
     id SERIAL PRIMARY KEY,
     tax_id VARCHAR(50) UNIQUE NOT NULL,
     name VARCHAR(500) NOT NULL,
+    normalized_name TEXT,
+    source_count INTEGER DEFAULT 0,
     country VARCHAR(2),
     city VARCHAR(255),
     region VARCHAR(255),
@@ -94,6 +97,19 @@ CREATE TABLE IF NOT EXISTS documents (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Stored documents for tenders (production-safe storage metadata)
+-- Intended for `download-documents` pipeline (MinIO/S3 upload).
+CREATE TABLE IF NOT EXISTS tender_documents (
+    id SERIAL PRIMARY KEY,
+    tender_id INTEGER REFERENCES tenders(id) ON DELETE CASCADE,
+    file_name TEXT,
+    storage_path TEXT NOT NULL,
+    source_url TEXT NOT NULL,
+    file_type VARCHAR(20) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(tender_id)
+);
+
 -- Search queries (for demo tracking)
 CREATE TABLE IF NOT EXISTS search_queries (
     id SERIAL PRIMARY KEY,
@@ -102,6 +118,32 @@ CREATE TABLE IF NOT EXISTS search_queries (
     filters JSONB,
     results JSONB,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Scheduled jobs configuration (UI-managed)
+CREATE TABLE IF NOT EXISTS scheduled_jobs (
+    id SERIAL PRIMARY KEY,
+    job_name VARCHAR(100) UNIQUE NOT NULL,
+    enabled BOOLEAN DEFAULT TRUE NOT NULL,
+    schedule_time VARCHAR(5) NOT NULL,
+    last_run_at TIMESTAMP,
+    last_status VARCHAR(20),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Job runs (for UI observability/log tail)
+CREATE TABLE IF NOT EXISTS job_runs (
+    id SERIAL PRIMARY KEY,
+    job_name VARCHAR(100) NOT NULL,
+    scheduled_for TIMESTAMP,
+    status VARCHAR(20) NOT NULL,
+    started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    finished_at TIMESTAMP,
+    exit_code INTEGER,
+    log_tail TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    UNIQUE(job_name, scheduled_for)
 );
 
 -- Indexes

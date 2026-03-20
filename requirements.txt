@@ -3,6 +3,7 @@ sqlalchemy==2.0.25
 pgvector==0.2.4
 openai==1.44.0
 requests==2.31.0
+ijson==3.3.0
 python-dotenv==1.0.1
 click==8.1.7
 beautifulsoup4==4.12.3

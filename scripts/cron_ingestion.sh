@@ -5,7 +5,9 @@
 cd "$(dirname "$0")/.."
 source venv/bin/activate
 
-python -m src.cli.main ingest --days 1
+# Run ingestion for the previous day (UTC).
+YESTERDAY="$(date -u -d 'yesterday' +%F)"
+python -m src.cli.main ingest --start-date "$YESTERDAY" --end-date "$YESTERDAY"
 
 # Optional: extract new organizations
-python -m src.cli.main extract-orgs --days 1
+python -m src.cli.main extract-orgs --start-date "$YESTERDAY" --end-date "$YESTERDAY"

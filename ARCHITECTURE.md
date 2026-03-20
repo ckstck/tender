@@ -34,7 +34,7 @@ Mock Data
 - `tenders`: Main entity with embeddings
 - `organizations`: Bidders (deduplicated by tax_id)
 - `tender_participants`: Many-to-many relationship
-- `documents`: Document metadata and storage URLs
+- `tender_documents`: Document metadata and storage URLs
 - `search_queries`: Demo search tracking
 
 **Indexes:**
@@ -98,7 +98,7 @@ Organizations search for relevant tenders using:
 3. For each tender:
    a. Check if exists (skip if yes)
    b. Get or create issuer
-   c. Generate summary (OpenAI gpt-4o-mini)
+   c. Generate summary (OpenAI gpt-5.4-mini)
    d. Build searchable_text
    e. Generate embedding (OpenAI text-embedding-3-small)
    f. Insert tender
@@ -140,7 +140,7 @@ Organizations search for relevant tenders using:
 - pgvector (vector extension)
 
 **AI/ML:**
-- OpenAI API (gpt-4o-mini for summaries)
+- OpenAI API (gpt-5.4-mini for summaries)
 - OpenAI Embeddings (text-embedding-3-small, 1536-dim)
 
 **CLI:**
@@ -195,7 +195,7 @@ Organizations search for relevant tenders using:
 ## Cost Analysis
 
 **Per 1000 Tenders:**
-- Summaries: $0.05 (gpt-4o-mini, ~100 tokens avg)
+- Summaries: $0.05 (gpt-5.4-mini, ~100 tokens avg)
 - Embeddings: $0.02 (text-embedding-3-small)
 - **Total: $0.07**
 

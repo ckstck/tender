@@ -56,7 +56,7 @@ All components of the Italian Tender Intelligence System MVP have been successfu
 ### Part 1: Tender Ingestion ✅
 - [x] ANAC API client implemented
 - [x] Mock data fallback working
-- [x] OpenAI summary generation (gpt-4o-mini)
+- [x] OpenAI summary generation (gpt-5.4-mini)
 - [x] OpenAI embedding generation (text-embedding-3-small)
 - [x] Searchable text creation
 - [x] Issuer management (get or create)
@@ -105,7 +105,7 @@ All components of the Italian Tender Intelligence System MVP have been successfu
 - [x] `tenders` - Main entity with AI fields
 - [x] `organizations` - Bidders (deduplicated)
 - [x] `tender_participants` - Many-to-many
-- [x] `documents` - Document metadata
+- [x] `tender_documents` - Stored document metadata (MinIO/S3)
 - [x] `search_queries` - Search tracking
 
 ### Indexes Created (8 total)
@@ -168,7 +168,7 @@ All components of the Italian Tender Intelligence System MVP have been successfu
 
 ### Manual Testing Checklist
 - [ ] Database initialization (run `scripts/init_db.py`)
-- [ ] Mock data ingestion (run `ingest --days 30`)
+- [ ] Mock data ingestion (run `ingest --start-date YYYY-MM-DD --end-date YYYY-MM-DD`)
 - [ ] Organization extraction (run `extract-orgs`)
 - [ ] Basic search (run `search --query "test"`)
 - [ ] Filtered search (run with --min-value, --cpv, etc.)
@@ -199,7 +199,7 @@ All components of the Italian Tender Intelligence System MVP have been successfu
 ## Cost Analysis
 
 ### AI Costs (per 1000 tenders)
-- Summaries: $0.05 (gpt-4o-mini)
+- Summaries: $0.05 (gpt-5.4-mini)
 - Embeddings: $0.02 (text-embedding-3-small)
 - **Total: $0.07 per 1000 tenders**
 
@@ -268,7 +268,7 @@ All components of the Italian Tender Intelligence System MVP have been successfu
 
 1. **Setup Environment**
    ```bash
-   cd /home/loki/projects/tender
+   cd /root/bluestar/tender
    python3 -m venv venv
    source venv/bin/activate
    pip install -r requirements.txt
@@ -288,8 +288,8 @@ All components of the Italian Tender Intelligence System MVP have been successfu
 
 4. **Run First Ingestion**
    ```bash
-   python -m src.cli.main ingest --days 30
-   python -m src.cli.main extract-orgs
+   python -m src.cli.main ingest --start-date YYYY-MM-DD --end-date YYYY-MM-DD
+   python -m src.cli.main extract-orgs --start-date YYYY-MM-DD --end-date YYYY-MM-DD
    python -m src.cli.main status
    ```
 

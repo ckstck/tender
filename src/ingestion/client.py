@@ -5,6 +5,7 @@ from typing import Callable, Dict, Iterator, List, Optional, Set
 
 import ijson
 import requests
+from urllib.parse import urlparse, urlunparse
 
 from src.config import Config
 
@@ -65,6 +66,85 @@ class ANACClient:
             return datetime.fromisoformat(normalized).replace(tzinfo=None)
         except Exception:
             return None
+
+    # Fallback portal sources (real-world pages).
+    # Used when OCDS doesn't provide tender.documents[].url.
+    ANAC_UI_BASE_URL = "https://pubblicitalegale.anticorruzione.it"
+    MEPA_BASE_URL = "https://www.acquistinretepa.it"
+
+    @staticmethod
+    def detect_source_platform(
+        tender_id: Optional[str],
+        tender_url: Optional[str],
+        title: Optional[str],
+    ) -> str:
+        """
+        Best-effort platform detection.
+        We only need this to choose a fallback portal base domain.
+        """
+        haystack = " ".join(
+            [
+                tender_id or "",
+                tender_url or "",
+                title or "",
+            ]
+        ).lower()
+
+        if "acquistinretepa" in haystack or "mepa" in haystack:
+            return "MEPA"
+        return "ANAC"
+
+    @staticmethod
+    def normalize_portal_domain(url: str) -> str:
+        """
+        Extract a normalized domain for portal counting.
+        - lowercase
+        - remove leading `www.`
+        - ignore query params/fragments
+        """
+        if not url or not isinstance(url, str):
+            return ""
+
+        candidate = url.strip()
+        if not candidate:
+            return ""
+
+        if not (candidate.startswith("http://") or candidate.startswith("https://")):
+            candidate = "https://" + candidate
+
+        parsed = urlparse(candidate)
+        host = (parsed.netloc or "").strip().lower()
+        if host.startswith("www."):
+            host = host[len("www.") :]
+        return host
+
+    @staticmethod
+    def normalize_portal_url(url: str) -> Optional[str]:
+        """
+        Canonicalize URL for storage in `tenders.document_portal_url`.
+        Removes query/fragment and removes `www.` from host.
+        """
+        if not url or not isinstance(url, str):
+            return None
+
+        candidate = url.strip()
+        if not candidate:
+            return None
+
+        if not (candidate.startswith("http://") or candidate.startswith("https://")):
+            candidate = "https://" + candidate
+
+        parsed = urlparse(candidate)
+        domain = ANACClient.normalize_portal_domain(candidate)
+        if not domain:
+            return None
+
+        # Keep path only (no query/fragment).
+        path = parsed.path or ""
+        # Ensure path is stable: drop empty path to return https://domain.
+        if path == "":
+            return f"https://{domain}"
+        return urlunparse(("https", domain, path, "", "", ""))
 
     def _get_with_retries(
         self,
@@ -145,6 +225,15 @@ class ANACClient:
 
         seen_tender_ids: Set[str] = set()
         yielded = 0
+        # Track how we populated Tender.document_portal_url during normalization.
+        # "documents" means tender.documents[].url was present.
+        # "compiled_release" means we used OCDS compiledRelease uri/url.
+        # "fallback_platform_base" means we used the platform base URL.
+        doc_portal_total = 0
+        doc_portal_from_documents = 0
+        doc_portal_from_compiled_release = 0
+        doc_portal_from_fallback_platform_base = 0
+        unique_domains: Set[str] = set()
 
         # 1) Try `/records` with offset-based pagination.
         used_records = False
@@ -264,9 +353,31 @@ class ANACClient:
                 seen_tender_ids.add(tid)
                 yield tender
                 yielded += 1
+                doc_portal_total += 1
+                src = tender.get("document_portal_url_source")
+                if src == "documents":
+                    doc_portal_from_documents += 1
+                elif src == "compiled_release":
+                    doc_portal_from_compiled_release += 1
+                elif src == "fallback_platform_base":
+                    doc_portal_from_fallback_platform_base += 1
+
+                # Keep track of unique domains for observability.
+                doc_url = tender.get("document_portal_url")
+                domain = self.normalize_portal_domain(doc_url) if isinstance(doc_url, str) else ""
+                if domain:
+                    unique_domains.add(domain)
                 new_in_page += 1
 
                 if max_tenders is not None and yielded >= max_tenders:
+                    logger.info(
+                        "Document portal URL population (records, early stop): total=%s from_documents=%s from_compiled_release=%s from_fallback_platform_base=%s unique_domains=%s",
+                        doc_portal_total,
+                        doc_portal_from_documents,
+                        doc_portal_from_compiled_release,
+                        doc_portal_from_fallback_platform_base,
+                        len(unique_domains),
+                    )
                     return
 
             # If we keep getting pages but no new in-window tenders, stop early.
@@ -289,9 +400,25 @@ class ANACClient:
         # 2) Fallback: stream OCDS monthly bulk files.
         # Only do this if `/records` didn't yield anything.
         if used_records and yielded > 0:
+            logger.info(
+                "Document portal URL population (records): total=%s from_documents=%s from_compiled_release=%s from_fallback_platform_base=%s unique_domains=%s",
+                doc_portal_total,
+                doc_portal_from_documents,
+                doc_portal_from_compiled_release,
+                doc_portal_from_fallback_platform_base,
+                len(unique_domains),
+            )
             return
 
         if used_records and yielded == 0:
+            logger.info(
+                "Document portal URL population (records yielded none): total=%s from_documents=%s from_compiled_release=%s from_fallback_platform_base=%s unique_domains=%s",
+                doc_portal_total,
+                doc_portal_from_documents,
+                doc_portal_from_compiled_release,
+                doc_portal_from_fallback_platform_base,
+                len(unique_domains),
+            )
             # Endpoint returned pages, but none normalized into valid tenders.
             return
 
@@ -385,10 +512,32 @@ class ANACClient:
                     yield tender
                     yielded += 1
                     yielded_in_bulk += 1
+                    doc_portal_total += 1
+                    src = tender.get("document_portal_url_source")
+                    if src == "documents":
+                        doc_portal_from_documents += 1
+                    elif src == "compiled_release":
+                        doc_portal_from_compiled_release += 1
+                    elif src == "fallback_platform_base":
+                        doc_portal_from_fallback_platform_base += 1
+
+                    # Track unique domains for observability.
+                    doc_url = tender.get("document_portal_url")
+                    domain = self.normalize_portal_domain(doc_url) if isinstance(doc_url, str) else ""
+                    if domain:
+                        unique_domains.add(domain)
                     month_yielded += 1
 
                     if max_tenders is not None and yielded >= max_tenders:
                         resp.close()
+                        logger.info(
+                            "Document portal URL population (bulk, early stop): total=%s from_documents=%s from_compiled_release=%s from_fallback_platform_base=%s unique_domains=%s",
+                            doc_portal_total,
+                            doc_portal_from_documents,
+                            doc_portal_from_compiled_release,
+                            doc_portal_from_fallback_platform_base,
+                            len(unique_domains),
+                        )
                         return
 
                 resp.close()
@@ -407,6 +556,15 @@ class ANACClient:
         if yielded_in_bulk == 0:
             logger.info(
                 "Bulk fallback completed for the bounded window but yielded no valid tenders."
+            )
+        else:
+            logger.info(
+                "Document portal URL population (bulk): total=%s from_documents=%s from_compiled_release=%s from_fallback_platform_base=%s unique_domains=%s",
+                doc_portal_total,
+                doc_portal_from_documents,
+                doc_portal_from_compiled_release,
+                doc_portal_from_fallback_platform_base,
+                len(unique_domains),
             )
 
     def fetch_tenders(
@@ -810,16 +968,61 @@ class ANACClient:
 
         documents = tender_obj.get("documents") or []
         document_portal_url = None
+        document_portal_url_source = "none"
         if isinstance(documents, list) and documents:
             for d in documents:
                 if not isinstance(d, dict):
                     continue
+                # Priority (real-world): tender.documents[].url
                 url = d.get("url")
-                if isinstance(url, str) and url:
-                    document_portal_url = url
+                if isinstance(url, str) and url.strip():
+                    document_portal_url = url.strip()
+                    document_portal_url_source = "documents"
                     break
 
-        tender_url = compiled_release.get("uri") or compiled_release.get("url")
+        # Portal identifiers from OCDS.
+        tender_url = (
+            compiled_release.get("uri")
+            or compiled_release.get("url")
+            or tender_obj.get("uri")
+            or tender_obj.get("url")
+        )
+        if not tender_url:
+            # Some payloads keep release metadata in a nested `release` object.
+            release_obj = compiled_release.get("release") or compiled_release.get("compiledRelease") or {}
+            if isinstance(release_obj, dict):
+                tender_url = release_obj.get("uri") or release_obj.get("url")
+
+        source_platform = self.detect_source_platform(
+            str(tender_id) if tender_id else None,
+            tender_url if isinstance(tender_url, str) else None,
+            title,
+        )
+
+        # Fallbacks (source-aware).
+        if not document_portal_url and isinstance(tender_url, str) and tender_url.strip():
+            # Priority (messy OCDS): compiledRelease.uri/url
+            document_portal_url = tender_url.strip()
+            document_portal_url_source = "compiled_release"
+
+        if not document_portal_url:
+            # Final priority: platform base domain (ANAC UI / MePA)
+            base = (
+                self.MEPA_BASE_URL
+                if source_platform == "MEPA"
+                else self.ANAC_UI_BASE_URL
+            )
+            document_portal_url = base
+            document_portal_url_source = "fallback_platform_base"
+
+        # Canonicalize for storage + "LIKE %domain%" queries.
+        normalized_portal_url = self.normalize_portal_url(document_portal_url)
+        if normalized_portal_url:
+            document_portal_url = normalized_portal_url
+        else:
+            document_portal_url = self.ANAC_UI_BASE_URL
+            document_portal_url_source = "fallback_platform_base"
+            source_platform = "ANAC"
 
         return {
             "tender_id": str(tender_id) if tender_id else "",
@@ -842,6 +1045,8 @@ class ANACClient:
             "lots_data": self._sanitize_json(lots_data),
             "tender_url": tender_url,
             "document_portal_url": document_portal_url,
+            "document_portal_url_source": document_portal_url_source,
+            "source_platform": source_platform,
             "participants": participants,
         }
 

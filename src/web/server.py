@@ -10,17 +10,36 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Deque, Dict, List, Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from sqlalchemy import text, func
+
 from src.database.connection import get_db
-from src.database.models import Document, Issuer, Organization, SearchQuery, Tender
+from src.config import Config, ENV_PATH, describe_database_url
+from src.database.models import (
+    Issuer,
+    JobRun,
+    Organization,
+    ScheduledJob,
+    SearchQuery,
+    Tender,
+    TenderParticipant,
+    TenderDocument,
+)
 from src.ingestion.pipeline import IngestionPipeline
 from src.search.hybrid import HybridSearch
+from src.scheduler.job_runner import acquire_job_run, start_job_run_async
 
 logger = logging.getLogger(__name__)
+
+print(
+    "Web server startup: ENV_PATH=%s DATABASE_URL=%s (%s)"
+    % (ENV_PATH, Config.DATABASE_URL, describe_database_url(Config.DATABASE_URL)),
+    flush=True,
+)
 
 BASE_DIR = Path(__file__).resolve().parents[2]  # tender/
 VENV_PYTHON = BASE_DIR / "venv" / "bin" / "python"
@@ -352,6 +371,53 @@ if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 
+@app.on_event("startup")
+def ensure_scheduled_jobs() -> None:
+    # Ensure we have production-friendly default job config rows.
+    default_job_name = "daily_ingestion"
+    default_download_job_name = "document_download"
+    with get_db() as db:
+        existing = (
+            db.query(ScheduledJob).filter(ScheduledJob.job_name == default_job_name).first()
+        )
+        if not existing:
+            db.add(
+                ScheduledJob(
+                    job_name=default_job_name,
+                    enabled=False,
+                    schedule_time="09:00",
+                    last_status=None,
+                    last_run_at=None,
+                )
+            )
+
+        existing_download = (
+            db.query(ScheduledJob)
+            .filter(ScheduledJob.job_name == default_download_job_name)
+            .first()
+        )
+        if not existing_download:
+            db.add(
+                ScheduledJob(
+                    job_name=default_download_job_name,
+                    enabled=False,
+                    schedule_time="09:10",
+                    last_status=None,
+                    last_run_at=None,
+                )
+            )
+
+        # Backwards compatibility: older builds may have used this job name.
+        # Keep it disabled so only `document_download` runs going forward.
+        legacy_download = (
+            db.query(ScheduledJob)
+            .filter(ScheduledJob.job_name == "daily_download_documents")
+            .first()
+        )
+        if legacy_download and legacy_download.enabled:
+            legacy_download.enabled = False
+
+
 @app.get("/", response_class=HTMLResponse)
 def index() -> HTMLResponse:
     if not INDEX_HTML.exists():
@@ -360,29 +426,187 @@ def index() -> HTMLResponse:
 
 
 @app.get("/api/status")
-def api_status() -> Dict[str, Any]:
+def api_status(response: Response) -> Dict[str, Any]:
+    # Ensure the UI never relies on cached stats.
+    response.headers["Cache-Control"] = "no-store"
+    print(
+        "api_status DATABASE_URL=%s (%s)"
+        % (Config.DATABASE_URL, describe_database_url(Config.DATABASE_URL)),
+        flush=True,
+    )
+
     with get_db() as db:
         tender_count = db.query(Tender).count()
         org_count = db.query(Organization).count()
         issuer_count = db.query(Issuer).count()
-        doc_count = db.query(Document).count()
+        documents_count = db.query(TenderDocument).count()
         search_count = db.query(SearchQuery).count()
+
+    print(
+        "api_status counts tenders=%s organizations=%s issuers=%s documents=%s search_queries=%s"
+        % (tender_count, org_count, issuer_count, documents_count, search_count),
+        flush=True,
+    )
+
     return {
         "tenders": tender_count,
         "organizations": org_count,
         "issuers": issuer_count,
-        "documents": doc_count,
+        "documents": documents_count,
+        # Backward compatible field name:
         "search_queries": search_count,
+        # Spec-aligned field name:
+        "search_queries_count": search_count,
         "job_queue_size": len(JOB_STORE._jobs),
     }
 
 
+@app.get("/api/debug/org-count")
+def api_debug_org_count(response: Response) -> Dict[str, Any]:
+    # Forced no-cache + raw SQL COUNT for debugging UI vs backend.
+    response.headers["Cache-Control"] = "no-store"
+    print(
+        "api_debug_org_count DATABASE_URL=%s (%s)"
+        % (Config.DATABASE_URL, describe_database_url(Config.DATABASE_URL)),
+        flush=True,
+    )
+
+    with get_db() as db:
+        row = db.execute(text("SELECT COUNT(*) FROM organizations")).fetchone()
+        count = int(row[0]) if row and row[0] is not None else 0
+
+    return {
+        "organizations": count,
+        "database": describe_database_url(Config.DATABASE_URL),
+    }
+
+
+class ScheduledJobUpsert(BaseModel):
+    job_name: str
+    enabled: bool = True
+    # Format: HH:MM (24h)
+    schedule_time: str
+
+
+class ScheduledJobToggleRequest(BaseModel):
+    enabled: bool
+
+
 @app.get("/api/jobs")
-def api_jobs(limit: int = 20) -> Dict[str, Any]:
+def api_scheduled_jobs() -> Dict[str, Any]:
+    """
+    UI-managed scheduled ingestion jobs.
+    Includes last run + running run tail for observability.
+    """
+    with get_db() as db:
+        jobs = db.query(ScheduledJob).order_by(ScheduledJob.job_name).all()
+
+        out_jobs: List[Dict[str, Any]] = []
+        for j in jobs:
+            current_run = (
+                db.query(JobRun)
+                .filter(JobRun.job_name == j.job_name, JobRun.status == "running")
+                .order_by(JobRun.started_at.desc())
+                .first()
+            )
+
+            last_completed = (
+                db.query(JobRun)
+                .filter(
+                    JobRun.job_name == j.job_name,
+                    JobRun.status.in_(("success", "failed")),
+                )
+                .order_by(JobRun.finished_at.desc())
+                .first()
+            )
+
+            out_jobs.append(
+                {
+                    "job_name": j.job_name,
+                    "enabled": bool(j.enabled),
+                    "schedule_time": j.schedule_time,
+                    "last_run_at": j.last_run_at.isoformat() if j.last_run_at else None,
+                    "last_status": j.last_status,
+                    "current_run": (
+                        {
+                            "run_id": current_run.id,
+                            "status": current_run.status,
+                            "started_at": current_run.started_at.isoformat() if current_run.started_at else None,
+                            "log_tail": current_run.log_tail or "",
+                        }
+                        if current_run
+                        else None
+                    ),
+                    "last_run": (
+                        {
+                            "run_id": last_completed.id,
+                            "status": last_completed.status,
+                            "finished_at": last_completed.finished_at.isoformat() if last_completed.finished_at else None,
+                            "exit_code": last_completed.exit_code,
+                            "log_tail": last_completed.log_tail or "",
+                        }
+                        if last_completed
+                        else None
+                    ),
+                }
+            )
+
+        return {"jobs": out_jobs}
+
+
+@app.post("/api/jobs")
+def api_upsert_scheduled_job(req: ScheduledJobUpsert) -> Dict[str, Any]:
+    # Validate schedule_time = HH:MM
+    if not re.fullmatch(r"\d{2}:\d{2}", req.schedule_time.strip()):
+        raise HTTPException(status_code=400, detail="schedule_time must be HH:MM")
+
+    with get_db() as db:
+        job = db.query(ScheduledJob).filter(ScheduledJob.job_name == req.job_name).first()
+        if not job:
+            job = ScheduledJob(
+                job_name=req.job_name,
+                enabled=req.enabled,
+                schedule_time=req.schedule_time.strip(),
+                last_status=None,
+                last_run_at=None,
+            )
+            db.add(job)
+        else:
+            job.enabled = bool(req.enabled)
+            job.schedule_time = req.schedule_time.strip()
+
+    return {"ok": True}
+
+
+@app.post("/api/jobs/{job_name}/toggle")
+def api_toggle_scheduled_job(job_name: str, req: ScheduledJobToggleRequest) -> Dict[str, Any]:
+    with get_db() as db:
+        job = db.query(ScheduledJob).filter(ScheduledJob.job_name == job_name).first()
+        if not job:
+            raise HTTPException(status_code=404, detail="Scheduled job not found")
+        job.enabled = bool(req.enabled)
+
+    return {"ok": True}
+
+
+@app.post("/api/jobs/{job_name}/run")
+def api_run_scheduled_job(job_name: str) -> Dict[str, Any]:
+    scheduled_for = datetime.utcnow().replace(second=0, microsecond=0)
+
+    run_id = acquire_job_run(job_name=job_name, scheduled_for=scheduled_for)
+    if run_id is None:
+        raise HTTPException(status_code=409, detail="Job is disabled or already running")
+
+    start_job_run_async(run_id)
+    return {"ok": True, "run_id": run_id}
+
+
+@app.get("/api/job-queue")
+def api_job_queue(limit: int = 20) -> Dict[str, Any]:
     return {"jobs": JOB_STORE.list_recent(limit=limit)}
 
 
-@app.get("/api/jobs/{job_id}")
+@app.get("/api/job-queue/{job_id}")
 def api_job(job_id: str) -> Dict[str, Any]:
     job = JOB_STORE.get(job_id)
     if not job:
@@ -390,7 +614,7 @@ def api_job(job_id: str) -> Dict[str, Any]:
     return job.to_api(include_logs=True)
 
 
-@app.get("/api/jobs/{job_id}/status")
+@app.get("/api/job-queue/{job_id}/status")
 def api_job_status(job_id: str) -> Dict[str, Any]:
     job = JOB_STORE.get(job_id)
     if not job:
@@ -404,7 +628,7 @@ def api_job_status(job_id: str) -> Dict[str, Any]:
     }
 
 
-@app.post("/api/jobs/{job_id}/stop")
+@app.post("/api/job-queue/{job_id}/stop")
 def api_job_stop(job_id: str) -> Dict[str, Any]:
     try:
         return JOB_STORE.request_stop(job_id)
@@ -444,6 +668,169 @@ def api_orgs(limit: int = 50, offset: int = 0) -> Dict[str, Any]:
     }
 
 
+@app.get("/api/organizations")
+def api_organizations(limit: int = 20, offset: int = 0) -> Dict[str, Any]:
+    """
+    DB-only organizations browser for the UI.
+    Returns participation counts via JOIN with `tender_participants`.
+    """
+    limit = min(max(limit, 1), 100)
+    offset = max(offset, 0)
+
+    with get_db() as db:
+        total = db.query(Organization).count()
+
+        rows = (
+            db.query(
+                Organization.id,
+                Organization.tax_id,
+                Organization.name,
+                func.count(TenderParticipant.tender_id).label("participation_count"),
+            )
+            .outerjoin(TenderParticipant, TenderParticipant.organization_id == Organization.id)
+            .group_by(Organization.id, Organization.tax_id, Organization.name)
+            .order_by(Organization.id)
+            .offset(offset)
+            .limit(limit)
+            .all()
+        )
+
+    return {
+        "total": total,
+        "items": [
+            {
+                "id": r[0],
+                "tax_id": r[1],
+                "name": r[2],
+                "participation_count": int(r[3] or 0),
+            }
+            for r in rows
+        ],
+    }
+
+
+@app.get("/api/organizations/{org_id}")
+def api_organization_details(
+    org_id: int,
+    limit: int = 20,
+    offset: int = 0,
+) -> Dict[str, Any]:
+    """
+    DB-only organization detail endpoint including related tenders.
+    """
+    limit = min(max(limit, 1), 100)
+    offset = max(offset, 0)
+
+    with get_db() as db:
+        org = db.query(Organization).filter(Organization.id == org_id).first()
+        if not org:
+            raise HTTPException(status_code=404, detail="Organization not found")
+
+        participation_count = (
+            db.query(func.count(TenderParticipant.tender_id))
+            .filter(TenderParticipant.organization_id == org_id)
+            .scalar()
+        )
+        participation_count = int(participation_count or 0)
+
+        # Related tenders via join with tender_participants.
+        tender_rows = (
+            db.query(Tender)
+            .join(TenderParticipant, TenderParticipant.tender_id == Tender.id)
+            .filter(TenderParticipant.organization_id == org_id)
+            .order_by(Tender.id)
+            .offset(offset)
+            .limit(limit)
+            .all()
+        )
+
+        # Build a plain dict while the SQLAlchemy session is alive.
+        return {
+            "id": org.id,
+            "tax_id": org.tax_id,
+            "name": org.name,
+            "normalized_name": org.normalized_name,
+            "source_count": org.source_count,
+            "country": org.country,
+            "city": org.city,
+            "region": org.region,
+            "industry": org.industry,
+            "size": org.size,
+            "participation_count": participation_count,
+            "related_tenders": [
+                {
+                    "tender_id": t.tender_id,
+                    "title": t.title,
+                    "estimated_value": str(t.estimated_value) if t.estimated_value is not None else None,
+                    "publication_date": t.publication_date.isoformat() if t.publication_date is not None else None,
+                    "contract_type": t.contract_type,
+                    "currency": t.currency,
+                }
+                for t in tender_rows
+            ],
+        }
+
+
+@app.get("/api/tenders")
+def api_tenders(limit: int = 20, offset: int = 0, include_embedding: bool = False) -> Dict[str, Any]:
+    """
+    Paginated tender browser for the web UI.
+
+    By default we exclude `embedding` because it is large; set include_embedding=true if you really need it.
+    """
+    limit = min(max(limit, 1), 100)
+    offset = max(offset, 0)
+
+    with get_db() as db:
+        total = db.query(Tender).count()
+
+        # Join issuer name for UI convenience.
+        rows = (
+            db.query(Tender, Issuer.name)
+            .outerjoin(Issuer, Tender.issuer_id == Issuer.id)
+            .order_by(Tender.id)
+            .offset(offset)
+            .limit(limit)
+            .all()
+        )
+
+        items: list[Dict[str, Any]] = []
+        for tender, issuer_name in rows:
+            out: Dict[str, Any] = {
+                "id": tender.id,
+                "tender_id": tender.tender_id,
+                "title": tender.title,
+                "issuer": issuer_name,
+                "estimated_value": str(tender.estimated_value) if tender.estimated_value is not None else None,
+                "currency": tender.currency,
+                "publication_date": tender.publication_date.isoformat() if tender.publication_date is not None else None,
+                "submission_deadline": tender.submission_deadline.isoformat() if tender.submission_deadline is not None else None,
+                "execution_start_date": tender.execution_start_date.isoformat() if tender.execution_start_date is not None else None,
+                "execution_end_date": tender.execution_end_date.isoformat() if tender.execution_end_date is not None else None,
+                "execution_location": tender.execution_location,
+                "nuts_codes": tender.nuts_codes,
+                "cpv_codes": tender.cpv_codes,
+                "contract_type": tender.contract_type,
+                "eu_funded": tender.eu_funded,
+                "renewable": tender.renewable,
+                "has_lots": tender.has_lots,
+                "lots_data": tender.lots_data,
+                "tender_url": tender.tender_url,
+                "document_portal_url": tender.document_portal_url,
+                "summary": tender.summary,
+                "created_at": tender.created_at.isoformat() if tender.created_at is not None else None,
+                "updated_at": tender.updated_at.isoformat() if tender.updated_at is not None else None,
+            }
+
+            if include_embedding:
+                # pgvector vector type can be large; return only if explicitly requested.
+                out["embedding"] = tender.embedding
+
+            items.append(out)
+
+    return {"total": total, "items": items}
+
+
 class SearchRequest(BaseModel):
     query: str = Field(..., min_length=1)
     min_value: Optional[float] = None
@@ -471,8 +858,23 @@ def api_search(req: SearchRequest) -> Dict[str, Any]:
     if req.eu_funded is not None:
         filters["eu_funded"] = req.eu_funded
 
+    # Persist every search attempt (even if results are empty).
+    # This is intentionally committed immediately to keep tracking reliable.
+    with get_db() as db:
+        row = SearchQuery(
+            query_text=req.query,
+            filters=filters if filters else {},
+            results=None,
+        )
+        db.add(row)
+        db.commit()
+
     searcher = HybridSearch()
-    results = searcher.search(req.query, filters=filters if filters else None, limit=req.limit)
+    results = searcher.search(
+        req.query,
+        filters=filters if filters else None,
+        limit=req.limit,
+    )
     return {"results": results}
 
 
